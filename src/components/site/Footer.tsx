@@ -1,0 +1,26 @@
+import { useTranslation } from "react-i18next";
+import { Car } from "lucide-react";
+
+export function Footer() {
+  const { t } = useTranslation();
+  return (
+    <footer className="border-t border-border/40 mt-24">
+      <div className="container mx-auto px-4 md:px-6 py-12">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
+              <Car className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div>
+              <div className="font-bold">Ride<span className="text-gradient">Wave</span></div>
+              <div className="text-xs text-muted-foreground">{t("footer.tagline")}</div>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} RideWave. {t("footer.rights")}
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
