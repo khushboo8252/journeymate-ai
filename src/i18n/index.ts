@@ -24,7 +24,6 @@ if (!i18n.isInitialized) {
       order: ["localStorage", "navigator"],
       caches: ["localStorage"],
     },
-    initImmediate: false,
   });
 }
 
