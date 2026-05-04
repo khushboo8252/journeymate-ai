@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Car } from "lucide-react";
+import "@/i18n";
 
 export function Footer() {
   const { t } = useTranslation();

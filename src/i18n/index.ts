@@ -5,22 +5,26 @@ import { en } from "./locales/en";
 import { hi } from "./locales/hi";
 
 if (!i18n.isInitialized) {
-  i18n
-    .use(LanguageDetector)
-    .use(initReactI18next)
-    .init({
-      resources: {
-        en: { translation: en },
-        hi: { translation: hi },
-      },
-      fallbackLng: "en",
-      supportedLngs: ["en", "hi"],
-      interpolation: { escapeValue: false },
-      detection: {
-        order: ["localStorage", "navigator"],
-        caches: ["localStorage"],
-      },
-    });
+  const isBrowser = typeof window !== "undefined";
+  const chain = isBrowser
+    ? i18n.use(LanguageDetector).use(initReactI18next)
+    : i18n.use(initReactI18next);
+
+  chain.init({
+    resources: {
+      en: { translation: en },
+      hi: { translation: hi },
+    },
+    lng: isBrowser ? undefined : "en",
+    fallbackLng: "en",
+    supportedLngs: ["en", "hi"],
+    interpolation: { escapeValue: false },
+    react: { useSuspense: false },
+    detection: {
+      order: ["localStorage", "navigator"],
+      caches: ["localStorage"],
+    },
+  });
 }
 
 export default i18n;
