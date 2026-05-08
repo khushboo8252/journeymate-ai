@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as PublishRouteImport } from './routes/publish'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RidesRideIdRouteImport } from './routes/rides.$rideId'
 
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
@@ -23,6 +25,11 @@ const SearchRoute = SearchRouteImport.update({
 const PublishRoute = PublishRouteImport.update({
   id: '/publish',
   path: '/publish',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -40,43 +47,78 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RidesRideIdRoute = RidesRideIdRouteImport.update({
+  id: '/rides/$rideId',
+  path: '/rides/$rideId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/rides/$rideId': typeof RidesRideIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/rides/$rideId': typeof RidesRideIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/rides/$rideId': typeof RidesRideIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/auth' | '/publish' | '/search'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/auth'
+    | '/dashboard'
+    | '/publish'
+    | '/search'
+    | '/rides/$rideId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/auth' | '/publish' | '/search'
-  id: '__root__' | '/' | '/about' | '/auth' | '/publish' | '/search'
+  to:
+    | '/'
+    | '/about'
+    | '/auth'
+    | '/dashboard'
+    | '/publish'
+    | '/search'
+    | '/rides/$rideId'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/auth'
+    | '/dashboard'
+    | '/publish'
+    | '/search'
+    | '/rides/$rideId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
+  DashboardRoute: typeof DashboardRoute
   PublishRoute: typeof PublishRoute
   SearchRoute: typeof SearchRoute
+  RidesRideIdRoute: typeof RidesRideIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -93,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/publish'
       fullPath: '/publish'
       preLoaderRoute: typeof PublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -116,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rides/$rideId': {
+      id: '/rides/$rideId'
+      path: '/rides/$rideId'
+      fullPath: '/rides/$rideId'
+      preLoaderRoute: typeof RidesRideIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -123,8 +179,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
+  DashboardRoute: DashboardRoute,
   PublishRoute: PublishRoute,
   SearchRoute: SearchRoute,
+  RidesRideIdRoute: RidesRideIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import {
@@ -24,6 +25,21 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [date, setDate] = useState("");
+
+  const handleSearch = () => {
+    navigate({
+      to: "/search",
+      search: {
+        from: from || undefined,
+        to: to || undefined,
+        date: date || undefined,
+      },
+    });
+  };
 
   const features = [
     { key: "price", icon: IndianRupee },
@@ -81,15 +97,15 @@ function Home() {
             >
               <div className="glass rounded-2xl p-3 md:p-4 shadow-[var(--shadow-elegant)]">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                  <SearchField icon={MapPin} label={t("search.from")} placeholder={t("search.from_ph")} className="md:col-span-4" />
-                  <SearchField icon={MapPin} label={t("search.to")} placeholder={t("search.to_ph")} className="md:col-span-4" />
-                  <SearchField icon={Calendar} label={t("search.date")} placeholder="DD / MM" type="date" className="md:col-span-2" />
-                  <Link to="/search" className="md:col-span-2">
-                    <Button className="w-full h-full min-h-12 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-lg shadow-primary/40 font-semibold">
+                  <SearchField icon={MapPin} label={t("search.from")} placeholder={t("search.from_ph")} value={from} onChange={setFrom} className="md:col-span-4" />
+                  <SearchField icon={MapPin} label={t("search.to")} placeholder={t("search.to_ph")} value={to} onChange={setTo} className="md:col-span-4" />
+                  <SearchField icon={Calendar} label={t("search.date")} placeholder="DD / MM" type="date" value={date} onChange={setDate} className="md:col-span-2" />
+                  <div className="md:col-span-2">
+                    <Button onClick={handleSearch} className="w-full h-full min-h-12 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-lg shadow-primary/40 font-semibold">
                       <Search className="h-4 w-4 mr-2" />
                       {t("search.button")}
                     </Button>
-                  </Link>
+                  </div>
                 </div>
               </div>
 
@@ -209,12 +225,16 @@ function SearchField({
   label,
   placeholder,
   type = "text",
+  value,
+  onChange,
   className = "",
 }: {
   icon: typeof MapPin;
   label: string;
   placeholder: string;
   type?: string;
+  value: string;
+  onChange: (v: string) => void;
   className?: string;
 }) {
   return (
@@ -226,6 +246,8 @@ function SearchField({
       <Input
         type={type}
         placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
         className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
       />
     </div>

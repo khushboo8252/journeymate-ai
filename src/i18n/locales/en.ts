@@ -5,6 +5,7 @@ export const en = {
     about: "About",
     login: "Log in",
     signup: "Sign up",
+    dashboard: "Dashboard",
   },
   hero: {
     badge: "AI-powered carpooling, reimagined",

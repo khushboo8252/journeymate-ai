@@ -5,6 +5,7 @@ export const hi = {
     about: "हमारे बारे में",
     login: "लॉग इन",
     signup: "साइन अप",
+    dashboard: "डैशबोर्ड",
   },
   hero: {
     badge: "AI-संचालित कारपूलिंग, नए अंदाज़ में",
