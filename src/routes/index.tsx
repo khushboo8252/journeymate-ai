@@ -86,6 +86,21 @@ function Home() {
               <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
                 {t("hero.subtitle")}
               </p>
+
+              <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+                <Link to="/auth">
+                  <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-[var(--shadow-glow)] font-semibold text-base h-12 px-8">
+                    <Users className="h-5 w-5 mr-2" />
+                    Become a Passenger
+                  </Button>
+                </Link>
+                <Link to="/auth">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto font-semibold text-base h-12 px-8 border-primary/40 hover:border-primary/70 hover:bg-primary/10 transition-all">
+                    <ArrowRight className="h-5 w-5 mr-2" />
+                    Start Your Journey
+                  </Button>
+                </Link>
+              </div>
             </motion.div>
 
             {/* SEARCH CARD */}

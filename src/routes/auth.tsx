@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, setToken } from "@/lib/api";
 import type { ApiUser } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -34,7 +35,9 @@ const signInSchema = z.object({
 const signUpSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Enter a valid email"),
+  phone: z.string().min(10, "Enter a valid mobile number"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  role: z.enum(["driver", "passenger"]),
 });
 
 type SignInValues = z.infer<typeof signInSchema>;
@@ -54,7 +57,11 @@ function SignInForm() {
       setToken(data.token);
       setUser(data.user);
       toast.success("Welcome back!");
-      navigate({ to: "/dashboard" });
+      if (data.user.role === "driver") {
+        navigate({ to: "/driver-setup" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign in failed");
     }
@@ -88,21 +95,29 @@ function SignUpForm() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const [showPw, setShowPw] = useState(false);
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<SignUpValues>({
+  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
+    defaultValues: { role: "passenger" },
   });
+  const selectedRole = watch("role");
 
   const onSubmit = async (values: SignUpValues) => {
     try {
       const data = await api.post<{ token: string; user: ApiUser }>("/api/auth/register", {
         fullName: values.fullName,
         email: values.email,
+        phone: values.phone,
         password: values.password,
+        role: values.role,
       });
       setToken(data.token);
       setUser(data.user);
       toast.success("Account created! Welcome to RideWave.");
-      navigate({ to: "/dashboard" });
+      if (data.user.role === "driver") {
+        navigate({ to: "/driver-setup" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
     }
@@ -110,6 +125,20 @@ function SignUpForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* Role selector */}
+      <div className="space-y-1.5">
+        <Label>I am a</Label>
+        <Select value={selectedRole} onValueChange={v => setValue("role", v as "driver" | "passenger")}>
+          <SelectTrigger className="bg-background/60 border-border/40">
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="passenger">Passenger</SelectItem>
+            <SelectItem value="driver">Driver</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="su-name">Full name</Label>
         <Input id="su-name" type="text" placeholder="Priya Sharma" {...register("fullName")} />
@@ -119,6 +148,11 @@ function SignUpForm() {
         <Label htmlFor="su-email">Email</Label>
         <Input id="su-email" type="email" placeholder="you@example.com" {...register("email")} />
         {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="su-phone">Mobile number</Label>
+        <Input id="su-phone" type="tel" placeholder="+91 98765 43210" inputMode="numeric" {...register("phone")} />
+        {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="su-pw">Password</Label>

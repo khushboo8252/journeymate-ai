@@ -46,6 +46,9 @@ export interface ApiUser {
   email: string;
   phone: string | null;
   avatarUrl: string | null;
+  role: "driver" | "passenger";
+  vehicleSeats: number | null;
+  isProfileComplete: boolean;
   createdAt: string;
   updatedAt?: string;
 }

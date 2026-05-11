@@ -2,9 +2,24 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const Booking = require("../models/Booking");
 const Ride = require("../models/Ride");
-const { protect } = require("../middleware/auth");
+const { protect, restrictTo } = require("../middleware/auth");
 
 const router = express.Router();
+
+// GET /api/bookings/driver — all bookings on this driver's rides
+router.get("/driver", protect, restrictTo("driver"), async (req, res) => {
+  try {
+    const rideIds = await Ride.find({ driverId: req.user._id }).distinct("_id");
+    const bookings = await Booking.find({ rideId: { $in: rideIds } })
+      .sort({ createdAt: -1 })
+      .populate("passengerId", "fullName avatarUrl phone email")
+      .populate("rideId", "origin destination departureAt pricePerSeat seatsTotal")
+      .lean();
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // GET /api/bookings/my — passenger's own bookings
 router.get("/my", protect, async (req, res) => {

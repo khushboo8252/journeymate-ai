@@ -2,7 +2,7 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
-const { protect } = require("../middleware/auth");
+const { protect, restrictTo } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -67,10 +67,11 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/rides — create ride
+// POST /api/rides — create ride (drivers only)
 router.post(
   "/",
   protect,
+  restrictTo("driver"),
   [
     body("origin").trim().isLength({ min: 2 }).withMessage("Origin is required"),
     body("destination").trim().isLength({ min: 2 }).withMessage("Destination is required"),
@@ -104,8 +105,8 @@ router.post(
   }
 );
 
-// PATCH /api/rides/:id/cancel — driver cancels ride
-router.patch("/:id/cancel", protect, async (req, res) => {
+// PATCH /api/rides/:id/cancel — driver cancels ride (drivers only)
+router.patch("/:id/cancel", protect, restrictTo("driver"), async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id);
     if (!ride) return res.status(404).json({ message: "Ride not found." });

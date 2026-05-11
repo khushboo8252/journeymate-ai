@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as PublishRouteImport } from './routes/publish'
+import { Route as DriverSetupRouteImport } from './routes/driver-setup'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
@@ -25,6 +26,11 @@ const SearchRoute = SearchRouteImport.update({
 const PublishRoute = PublishRouteImport.update({
   id: '/publish',
   path: '/publish',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DriverSetupRoute = DriverSetupRouteImport.update({
+  id: '/driver-setup',
+  path: '/driver-setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
+  '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
   '/rides/$rideId': typeof RidesRideIdRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
+  '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
   '/rides/$rideId': typeof RidesRideIdRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
+  '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
   '/rides/$rideId': typeof RidesRideIdRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/dashboard'
+    | '/driver-setup'
     | '/publish'
     | '/search'
     | '/rides/$rideId'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/dashboard'
+    | '/driver-setup'
     | '/publish'
     | '/search'
     | '/rides/$rideId'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/dashboard'
+    | '/driver-setup'
     | '/publish'
     | '/search'
     | '/rides/$rideId'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
   DashboardRoute: typeof DashboardRoute
+  DriverSetupRoute: typeof DriverSetupRoute
   PublishRoute: typeof PublishRoute
   SearchRoute: typeof SearchRoute
   RidesRideIdRoute: typeof RidesRideIdRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/publish'
       fullPath: '/publish'
       preLoaderRoute: typeof PublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/driver-setup': {
+      id: '/driver-setup'
+      path: '/driver-setup'
+      fullPath: '/driver-setup'
+      preLoaderRoute: typeof DriverSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
   DashboardRoute: DashboardRoute,
+  DriverSetupRoute: DriverSetupRoute,
   PublishRoute: PublishRoute,
   SearchRoute: SearchRoute,
   RidesRideIdRoute: RidesRideIdRoute,

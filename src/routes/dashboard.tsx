@@ -6,21 +6,25 @@ import {
   ArrowRight,
   Calendar,
   Car,
+  ExternalLink,
   IndianRupee,
   Lock,
   LogOut,
   MapPin,
   Phone,
+  Search,
+  ShieldCheck,
   Ticket,
   Trash2,
   User,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -45,13 +49,20 @@ type BookingWithRide = ApiBooking & {
   };
 };
 
+type DriverBooking = ApiBooking & {
+  passengerId: ApiUser | null;
+  rideId: Pick<ApiRide, "_id" | "origin" | "destination" | "departureAt" | "pricePerSeat" | "seatsTotal"> | null;
+};
+
 function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const [myRides, setMyRides] = useState<ApiRide[]>([]);
   const [myBookings, setMyBookings] = useState<BookingWithRide[]>([]);
+  const [driverBookings, setDriverBookings] = useState<DriverBooking[]>([]);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const isDriver = user?.role === "driver";
 
   useEffect(() => {
     if (!user) return;
@@ -62,12 +73,23 @@ function DashboardPage() {
 
   const fetchData = async () => {
     if (!user) return;
-    const [rides, bookings] = await Promise.all([
-      api.get<ApiRide[]>("/api/rides/my"),
-      api.get<BookingWithRide[]>("/api/bookings/my"),
-    ]);
-    setMyRides(rides);
-    setMyBookings(bookings);
+    try {
+      const promises: [Promise<ApiRide[]>, Promise<BookingWithRide[]>, Promise<DriverBooking[]>] = [
+        api.get<ApiRide[]>("/api/rides/my"),
+        api.get<BookingWithRide[]>("/api/bookings/my"),
+        user.role === "driver"
+          ? api.get<DriverBooking[]>("/api/bookings/driver")
+          : Promise.resolve([]),
+      ];
+      const [rides, bookings, drvrBookings] = await Promise.all(promises);
+      setMyRides(Array.isArray(rides) ? rides : []);
+      setMyBookings(Array.isArray(bookings) ? bookings : []);
+      setDriverBookings(Array.isArray(drvrBookings) ? drvrBookings : []);
+    } catch {
+      setMyRides([]);
+      setMyBookings([]);
+      setDriverBookings([]);
+    }
   };
 
   const saveProfile = async () => {
@@ -137,27 +159,43 @@ function DashboardPage() {
           {/* Profile header */}
           <div className="glass rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center gap-5">
             <Avatar className="h-16 w-16 border-2 border-primary/30">
+              <AvatarImage src={user.avatarUrl ?? undefined} />
               <AvatarFallback className="text-xl bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 text-center sm:text-left">
-              <h1 className="text-2xl font-bold">{fullName || "My Account"}</h1>
-              <p className="text-muted-foreground text-sm">{user.email ?? ""}</p>
+              <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                <h1 className="text-2xl font-bold">{fullName || "My Account"}</h1>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  isDriver
+                    ? "bg-gradient-to-r from-primary/20 to-accent/20 text-primary border border-primary/30"
+                    : "bg-muted text-muted-foreground border border-border/40"
+                }`}>
+                  {isDriver ? <Car className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                  {isDriver ? "Driver" : "Passenger"}
+                </span>
+              </div>
+              <p className="text-muted-foreground text-sm mt-0.5">{user.email ?? ""}</p>
             </div>
             <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
               <LogOut className="h-4 w-4" />Sign out
             </Button>
           </div>
 
-          <Tabs defaultValue="rides">
-            <TabsList className="mb-6 bg-muted/40">
-              <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />My rides ({myRides.length})</TabsTrigger>
+          <Tabs defaultValue={isDriver ? "rides" : "bookings"}>
+            <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">
+              {isDriver && (
+                <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />My rides ({myRides.length})</TabsTrigger>
+              )}
+              {isDriver && (
+                <TabsTrigger value="passengers" className="flex items-center gap-1.5"><Users className="h-4 w-4" />Passengers ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
+              )}
               <TabsTrigger value="bookings" className="flex items-center gap-1.5"><Ticket className="h-4 w-4" />My bookings ({myBookings.length})</TabsTrigger>
               <TabsTrigger value="profile" className="flex items-center gap-1.5"><User className="h-4 w-4" />Profile</TabsTrigger>
             </TabsList>
 
-            {/* MY RIDES */}
+            {/* MY RIDES — drivers only */}
             <TabsContent value="rides" className="space-y-4">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">Rides you're driving</p>
@@ -203,9 +241,84 @@ function DashboardPage() {
               ))}
             </TabsContent>
 
+            {/* PASSENGERS — driver view of who booked their rides */}
+            {isDriver && (
+              <TabsContent value="passengers" className="space-y-4">
+                <p className="text-sm text-muted-foreground">Passengers who booked your rides</p>
+                {driverBookings.length === 0 && (
+                  <div className="text-center py-16 glass rounded-2xl">
+                    <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-muted-foreground">No passengers yet.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Passengers will appear here once someone books your ride.</p>
+                  </div>
+                )}
+                {driverBookings.map(booking => {
+                  const passenger = booking.passengerId;
+                  const ride = typeof booking.rideId === "object" ? booking.rideId : null;
+                  const passengerInitials = passenger?.fullName
+                    ? passenger.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
+                    : "?";
+                  return (
+                    <div key={booking._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10 border border-border/40">
+                          <AvatarImage src={(passenger as any)?.avatarUrl ?? undefined} />
+                          <AvatarFallback className="text-sm bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
+                            {passengerInitials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium text-sm">{passenger?.fullName ?? "Unknown"}</p>
+                          {(passenger as any)?.phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3" />{(passenger as any).phone}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        {ride && (
+                          <div className="flex items-center gap-1.5 text-sm font-medium">
+                            <MapPin className="h-3.5 w-3.5 text-primary" />{ride.origin}
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                          {ride && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}
+                            </span>
+                          )}
+                          <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""}</span>
+                          {ride && (
+                            <span className="flex items-center gap-1">
+                              <IndianRupee className="h-3 w-3" />{ride.pricePerSeat * booking.seats} total
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Badge
+                        variant={booking.status === "confirmed" ? "default" : "secondary"}
+                        className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}
+                      >
+                        {booking.status}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </TabsContent>
+            )}
+
             {/* MY BOOKINGS */}
             <TabsContent value="bookings" className="space-y-4">
-              <p className="text-sm text-muted-foreground">Rides you've booked as passenger</p>
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">Rides you've booked as passenger</p>
+                <Link to="/search">
+                  <Button size="sm" variant="outline" className="flex items-center gap-1.5">
+                    <Search className="h-4 w-4" />Find a ride
+                  </Button>
+                </Link>
+              </div>
               {myBookings.length === 0 && (
                 <div className="text-center py-16 glass rounded-2xl">
                   <Ticket className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
@@ -253,7 +366,17 @@ function DashboardPage() {
             {/* PROFILE */}
             <TabsContent value="profile">
               <div className="glass rounded-2xl p-6 space-y-5 max-w-md">
-                <h2 className="text-lg font-semibold">Edit profile</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Edit profile</h2>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                    isDriver
+                      ? "bg-gradient-to-r from-primary/20 to-accent/20 text-primary border border-primary/30"
+                      : "bg-muted text-muted-foreground border border-border/40"
+                  }`}>
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    {isDriver ? "Driver account" : "Passenger account"}
+                  </span>
+                </div>
                 <Separator />
                 <div className="space-y-1.5">
                   <Label>Full name</Label>
@@ -270,6 +393,13 @@ function DashboardPage() {
                 <Button onClick={saveProfile} disabled={saving} className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
                   {saving ? "Saving…" : "Save changes"}
                 </Button>
+                {isDriver && (
+                  <Link to="/driver-setup">
+                    <Button variant="outline" className="w-full flex items-center gap-2 mt-1">
+                      <ExternalLink className="h-4 w-4" />Update driver &amp; bank details
+                    </Button>
+                  </Link>
+                )}
               </div>
             </TabsContent>
           </Tabs>

@@ -1,22 +1,23 @@
 const express = require("express");
 const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
-const { protect } = require("../middleware/auth");
+const { protect, restrictTo } = require("../middleware/auth");
 
 const router = express.Router();
 
-// GET /api/profile
+// GET /api/profile — get own profile
 router.get("/", protect, (req, res) => {
-  res.json(req.user.toPublic());
+  res.json({ status: "success", user: req.user.toPublic() });
 });
 
-// PUT /api/profile
+// PUT /api/profile — update basic profile (all roles)
 router.put(
   "/",
   protect,
   [
     body("fullName").optional().trim().isLength({ min: 2 }).withMessage("Name must be at least 2 characters"),
     body("phone").optional().trim(),
+    body("avatarUrl").optional().trim(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -24,19 +25,92 @@ router.put(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { fullName, phone } = req.body;
+    const { fullName, phone, avatarUrl } = req.body;
 
     try {
       const user = await User.findByIdAndUpdate(
         req.user._id,
-        { ...(fullName && { fullName }), ...(phone !== undefined && { phone }) },
+        {
+          ...(fullName && { fullName }),
+          ...(phone !== undefined && { phone }),
+          ...(avatarUrl !== undefined && { avatarUrl }),
+        },
         { new: true, runValidators: true }
       );
-      res.json(user.toPublic());
+      res.json({ status: "success", user: user.toPublic() });
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
   }
 );
+
+// PUT /api/profile/driver — driver onboarding (drivers only)
+router.put(
+  "/driver",
+  protect,
+  restrictTo("driver"),
+  [
+    body("fullName").optional().trim().isLength({ min: 2 }).withMessage("Name must be at least 2 characters"),
+    body("phone").trim().notEmpty().withMessage("Phone number is required"),
+    body("avatarUrl").optional().trim(),
+    body("vehicleSeats")
+      .isInt({ min: 1, max: 8 })
+      .withMessage("Vehicle seats must be between 1 and 8"),
+    body("bankAccountNumber")
+      .trim()
+      .isLength({ min: 9, max: 18 })
+      .withMessage("Enter a valid bank account number"),
+    body("ifscCode")
+      .trim()
+      .matches(/^[A-Z]{4}0[A-Z0-9]{6}$/)
+      .withMessage("Enter a valid IFSC code (e.g. SBIN0001234)"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: errors.array()[0].msg });
+    }
+
+    const { fullName, phone, avatarUrl, vehicleSeats, bankAccountNumber, ifscCode } = req.body;
+
+    try {
+      const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+          ...(fullName && { fullName }),
+          phone,
+          ...(avatarUrl !== undefined && { avatarUrl }),
+          vehicleSeats: Number(vehicleSeats),
+          bankAccountNumber,
+          ifscCode: ifscCode.toUpperCase(),
+          isProfileComplete: true,
+        },
+        { new: true, runValidators: true }
+      );
+      res.json({ status: "success", user: user.toPublic() });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+// GET /api/profile/driver/banking — return masked banking details (driver only)
+router.get("/driver/banking", protect, restrictTo("driver"), async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("+bankAccountNumber +ifscCode");
+    if (!user) return res.status(404).json({ message: "User not found." });
+    res.json({
+      status: "success",
+      banking: {
+        bankAccountNumber: user.bankAccountNumber
+          ? `${"*".repeat(user.bankAccountNumber.length - 4)}${user.bankAccountNumber.slice(-4)}`
+          : null,
+        ifscCode: user.ifscCode,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;
