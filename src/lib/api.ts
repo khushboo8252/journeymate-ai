@@ -49,6 +49,8 @@ export interface ApiUser {
   role: "driver" | "passenger";
   vehicleSeats: number | null;
   isProfileComplete: boolean;
+  isApproved?: boolean;
+  hasSeenApprovalNotification?: boolean;
   createdAt: string;
   updatedAt?: string;
 }
@@ -59,6 +61,7 @@ export interface ApiRide {
   origin: string;
   destination: string;
   departureAt: string;
+  arrivalAt: string | null;
   seatsTotal: number;
   seatsAvailable: number;
   pricePerSeat: number;

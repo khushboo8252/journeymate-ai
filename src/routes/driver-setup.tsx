@@ -32,6 +32,7 @@ const schema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   phone: z.string().min(10, "Enter a valid phone number"),
   vehicleSeats: z.string().min(1, "Select available seats"),
+  vehicleNumber: z.string().min(1, "Vehicle number is required"),
   bankAccountNumber: z
     .string()
     .min(9, "Account number must be at least 9 digits")
@@ -50,6 +51,18 @@ function DriverSetupPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
+
+  // Document upload states
+  const [drivingLicenseFront, setDrivingLicenseFront] = useState<File | null>(null);
+  const [drivingLicenseBack, setDrivingLicenseBack] = useState<File | null>(null);
+  const [aadharCardFront, setAadharCardFront] = useState<File | null>(null);
+  const [aadharCardBack, setAadharCardBack] = useState<File | null>(null);
+  const [panCardFront, setPanCardFront] = useState<File | null>(null);
+  const [rcFront, setRcFront] = useState<File | null>(null);
+  const [rcBack, setRcBack] = useState<File | null>(null);
+  const [vehicleImage, setVehicleImage] = useState<File | null>(null);
+
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
   const {
     register,
@@ -91,19 +104,121 @@ function DriverSetupPage() {
     reader.readAsDataURL(file);
   };
 
+  const handleDocumentUpload = async (file: File, type: string, side: string = "front") => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Document must be under 5MB");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("document", file);
+    formData.append("type", type);
+    if (side) formData.append("side", side);
+
+    try {
+      setUploadingDoc(`${type}-${side}`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/upload/document`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("rw_token")}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Upload failed");
+
+      return { url: data.url, publicId: data.publicId };
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+      return null;
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     try {
-      const data = await api.put<{ status: string; user: ApiUser }>("/api/profile/driver", {
+      // Upload all documents
+      const [
+        dlFront,
+        dlBack,
+        aadharFront,
+        aadharBack,
+        pan,
+        rcFrontDoc,
+        rcBackDoc,
+        vehicleImg,
+      ] = await Promise.all([
+        drivingLicenseFront ? handleDocumentUpload(drivingLicenseFront, "drivingLicense", "front") : Promise.resolve(null),
+        drivingLicenseBack ? handleDocumentUpload(drivingLicenseBack, "drivingLicense", "back") : Promise.resolve(null),
+        aadharCardFront ? handleDocumentUpload(aadharCardFront, "aadharCard", "front") : Promise.resolve(null),
+        aadharCardBack ? handleDocumentUpload(aadharCardBack, "aadharCard", "back") : Promise.resolve(null),
+        panCardFront ? handleDocumentUpload(panCardFront, "panCard", "front") : Promise.resolve(null),
+        rcFront ? handleDocumentUpload(rcFront, "rc", "front") : Promise.resolve(null),
+        rcBack ? handleDocumentUpload(rcBack, "rc", "back") : Promise.resolve(null),
+        vehicleImage ? handleDocumentUpload(vehicleImage, "vehicleImage", "front") : Promise.resolve(null),
+      ]);
+
+      // Build document objects
+      const drivingLicense = {
+        frontUrl: dlFront?.url || null,
+        frontPublicId: dlFront?.publicId || null,
+        backUrl: dlBack?.url || null,
+        backPublicId: dlBack?.publicId || null,
+      };
+
+      const aadharCard = {
+        frontUrl: aadharFront?.url || null,
+        frontPublicId: aadharFront?.publicId || null,
+        backUrl: aadharBack?.url || null,
+        backPublicId: aadharBack?.publicId || null,
+      };
+
+      const panCard = {
+        frontUrl: pan?.url || null,
+        frontPublicId: pan?.publicId || null,
+      };
+
+      const rc = {
+        frontUrl: rcFrontDoc?.url || null,
+        frontPublicId: rcFrontDoc?.publicId || null,
+        backUrl: rcBackDoc?.url || null,
+        backPublicId: rcBackDoc?.publicId || null,
+      };
+
+      const vehicleImageData = {
+        url: vehicleImg?.url || null,
+        publicId: vehicleImg?.publicId || null,
+      };
+
+      const payload: any = {
         fullName: values.fullName,
         phone: values.phone,
         vehicleSeats: Number(values.vehicleSeats),
+        vehicleNumber: values.vehicleNumber,
         bankAccountNumber: values.bankAccountNumber,
         ifscCode: values.ifscCode.toUpperCase(),
-        ...(avatarBase64 && { avatarUrl: avatarBase64 }),
-      });
+      };
+
+      if (avatarBase64) payload.avatarUrl = avatarBase64;
+      if (drivingLicenseFront || drivingLicenseBack) payload.drivingLicense = drivingLicense;
+      if (aadharCardFront || aadharCardBack) payload.aadharCard = aadharCard;
+      if (panCardFront) payload.panCard = panCard;
+      if (rcFront || rcBack) payload.rc = rc;
+      if (vehicleImage) payload.vehicleImage = vehicleImageData;
+
+      const data = await api.put<{ status: string; user: ApiUser; requiresApproval: boolean }>("/api/profile/driver", payload);
       setUser(data.user);
-      toast.success("Driver profile saved! You can now publish rides.");
-      navigate({ to: "/dashboard" });
+
+      if (data.requiresApproval) {
+        toast.success("Profile submitted for admin approval. You'll be notified once approved.");
+        navigate({ to: "/dashboard" });
+      } else {
+        toast.success("Driver profile saved! You can now publish rides.");
+        navigate({ to: "/dashboard" });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save profile");
     }
@@ -245,24 +360,40 @@ function DriverSetupPage() {
                 Vehicle details
               </h2>
               <Separator />
-              <div className="space-y-1.5 max-w-xs">
-                <Label>Available seats for passengers</Label>
-                <Select
-                  defaultValue="3"
-                  onValueChange={v => setValue("vehicleSeats", v)}
-                >
-                  <SelectTrigger className="bg-background/60 border-border/40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n} seat{n > 1 ? "s" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.vehicleSeats && <p className="text-xs text-destructive">{errors.vehicleSeats.message}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Vehicle number</Label>
+                  <Input placeholder="MH 01 AB 1234" {...register("vehicleNumber")} />
+                  {errors.vehicleNumber && <p className="text-xs text-destructive">{errors.vehicleNumber.message}</p>}
+                </div>
+                <div className="space-y-1.5 max-w-xs">
+                  <Label>Available seats for passengers</Label>
+                  <Select
+                    defaultValue="3"
+                    onValueChange={v => setValue("vehicleSeats", v)}
+                  >
+                    <SelectTrigger className="bg-background/60 border-border/40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[ 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(n => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n} seat{n > 1 ? "s" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.vehicleSeats && <p className="text-xs text-destructive">{errors.vehicleSeats.message}</p>}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Vehicle image</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setVehicleImage(e.target.files?.[0] || null)}
+                />
+                {uploadingDoc === "vehicleImage-front" && <p className="text-xs text-muted-foreground">Uploading...</p>}
               </div>
             </div>
 
@@ -304,12 +435,118 @@ function DriverSetupPage() {
               </div>
             </div>
 
+            {/* ── SECTION 4: Verification documents ─────────────────────── */}
+            <div className="glass rounded-2xl p-6 space-y-5">
+              <h2 className="font-semibold text-base flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" />
+                Verification documents
+                <span className="ml-auto text-xs font-normal text-muted-foreground">Required for approval</span>
+              </h2>
+              <Separator />
+              
+              {/* Driving License */}
+              <div className="space-y-3">
+                <Label className="font-medium">Driving License</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Front side</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setDrivingLicenseFront(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadingDoc === "drivingLicense-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Back side</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setDrivingLicenseBack(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadingDoc === "drivingLicense-back" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Aadhar Card */}
+              <div className="space-y-3">
+                <Label className="font-medium">Aadhar Card</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Front side</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setAadharCardFront(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadingDoc === "aadharCard-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Back side</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setAadharCardBack(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadingDoc === "aadharCard-back" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* PAN Card */}
+              <div className="space-y-3">
+                <Label className="font-medium">PAN Card</Label>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Front side</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setPanCardFront(e.target.files?.[0] || null)}
+                    className="mt-1"
+                  />
+                  {uploadingDoc === "panCard-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                </div>
+              </div>
+
+              {/* RC */}
+              <div className="space-y-3">
+                <Label className="font-medium">Vehicle RC</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Front side</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setRcFront(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadingDoc === "rc-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Back side</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setRcBack(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadingDoc === "rc-back" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <Button
               type="submit"
               disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold h-12 text-base"
             >
-              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Save driver profile"}
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Request Admin Approval"}
             </Button>
           </form>
         </motion.div>

@@ -21,6 +21,10 @@ const rideSchema = new mongoose.Schema(
       type: Date,
       required: [true, "Departure date/time is required"],
     },
+    arrivalAt: {
+      type: Date,
+      default: null,
+    },
     seatsTotal: {
       type: Number,
       required: true,

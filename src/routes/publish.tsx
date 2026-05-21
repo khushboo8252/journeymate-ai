@@ -30,6 +30,7 @@ const schema = z.object({
   destination: z.string().min(2, "Enter destination city"),
   date: z.string().min(1, "Pick a date"),
   time: z.string().min(1, "Pick a time"),
+  arrivalTime: z.string().optional(),
   seats: z.string().min(1),
   price: z.string().refine(v => Number(v) > 0, "Enter a valid price"),
   description: z.string().optional(),
@@ -53,6 +54,7 @@ function PublishPage() {
         origin: values.origin,
         destination: values.destination,
         departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
+        arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
         seatsTotal: Number(values.seats),
         pricePerSeat: Number(values.price),
         description: values.description || null,
@@ -119,6 +121,10 @@ function PublishPage() {
                 <Label>Departure time</Label>
                 <Input type="time" {...register("time")} />
                 {errors.time && <p className="text-xs text-destructive">{errors.time.message}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Arrival time <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input type="time" {...register("arrivalTime")} />
               </div>
               <div className="space-y-1.5">
                 <Label>Available seats</Label>

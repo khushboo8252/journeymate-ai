@@ -1,11 +1,13 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
+import { getSocket, joinUserRoom, joinDriverRoom } from "@/lib/socket";
 import {
   ArrowRight,
   Calendar,
   Car,
+  CheckCircle,
   ExternalLink,
   IndianRupee,
   Lock,
@@ -18,6 +20,7 @@ import {
   Trash2,
   User,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
@@ -56,12 +59,14 @@ type DriverBooking = ApiBooking & {
 
 function DashboardPage() {
   const { user, loading, signOut } = useAuth();
+  const router = useRouter();
   const [myRides, setMyRides] = useState<ApiRide[]>([]);
   const [myBookings, setMyBookings] = useState<BookingWithRide[]>([]);
   const [driverBookings, setDriverBookings] = useState<DriverBooking[]>([]);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showApprovalPopup, setShowApprovalPopup] = useState(false);
   const isDriver = user?.role === "driver";
 
   useEffect(() => {
@@ -69,6 +74,86 @@ function DashboardPage() {
     setFullName(user.fullName ?? "");
     setPhone(user.phone ?? "");
     fetchData();
+
+    // Connect to WebSocket
+    const socket = getSocket();
+    if (isDriver) {
+      joinDriverRoom(user._id);
+    } else {
+      joinUserRoom(user._id);
+    }
+
+    // Fetch latest user data to check approval status
+    const checkApprovalStatus = async () => {
+      try {
+        const userData = await api.get<{ user: ApiUser }>("/api/profile");
+        const updatedUser = userData.user;
+        
+        // Update local user state if needed
+        if (isDriver && updatedUser.isApproved && !updatedUser.hasSeenApprovalNotification) {
+          setShowApprovalPopup(true);
+
+          // Auto-dismiss after 10 seconds
+          const timer = setTimeout(() => {
+            setShowApprovalPopup(false);
+            // Mark as seen when auto-dismissed
+            api.post("/api/profile/notification-seen", {}).catch(console.error);
+          }, 10000);
+
+          return () => clearTimeout(timer);
+        }
+      } catch (err) {
+        console.error("Failed to check approval status:", err);
+      }
+    };
+
+    if (isDriver) {
+      checkApprovalStatus();
+    }
+
+    // Listen for real-time events
+    socket.on("driver_approved", (driver) => {
+      if (driver._id === user._id) {
+        setShowApprovalPopup(true);
+        toast.success("Your driver profile has been approved!");
+      }
+    });
+
+    socket.on("driver_rejected", (driver) => {
+      if (driver._id === user._id) {
+        toast.error("Your driver profile has been rejected. Please update your documents.");
+      }
+    });
+
+    socket.on("booking_created", (booking) => {
+      if (isDriver) {
+        toast.success(`New booking received! ${booking.passengerId?.fullName} booked ${booking.seats} seat(s)`);
+        fetchData();
+      }
+    });
+
+    socket.on("booking_cancelled", (booking) => {
+      if (isDriver) {
+        toast.info(`Booking cancelled by passenger`);
+        fetchData();
+      } else {
+        toast.info("Your booking has been cancelled");
+        fetchData();
+      }
+    });
+
+    socket.on("ride_cancelled", (ride) => {
+      toast.info("A ride you booked has been cancelled by the driver");
+      fetchData();
+    });
+
+    return () => {
+      socket.off("driver_approved");
+      socket.off("driver_rejected");
+      socket.off("booking_created");
+      socket.off("booking_cancelled");
+      socket.off("ride_cancelled");
+    };
   }, [user]);
 
   const fetchData = async () => {
@@ -124,6 +209,19 @@ function DashboardPage() {
     }
   };
 
+  const handlePopupClick = async () => {
+    // Mark notification as seen
+    await api.post("/api/profile/notification-seen", {});
+    setShowApprovalPopup(false);
+    router.navigate({ to: "/publish" });
+  };
+
+  const handlePopupDismiss = async () => {
+    // Mark notification as seen
+    await api.post("/api/profile/notification-seen", {});
+    setShowApprovalPopup(false);
+  };
+
   if (loading) return null;
 
   if (!user) {
@@ -175,6 +273,12 @@ function DashboardPage() {
                   {isDriver ? <Car className="h-3 w-3" /> : <User className="h-3 w-3" />}
                   {isDriver ? "Driver" : "Passenger"}
                 </span>
+                {isDriver && (user as any).isApproved && (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-green-500/20 text-green-600 border border-green-500/30">
+                    <CheckCircle className="h-3 w-3" />
+                    Verified
+                  </span>
+                )}
               </div>
               <p className="text-muted-foreground text-sm mt-0.5">{user.email ?? ""}</p>
             </div>
@@ -182,6 +286,41 @@ function DashboardPage() {
               <LogOut className="h-4 w-4" />Sign out
             </Button>
           </div>
+
+          {/* Approval Popup */}
+          {showApprovalPopup && (
+            <motion.div
+              initial={{ opacity: 0, y: -50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              className="glass rounded-2xl p-6 mb-6 border border-green-500/30 bg-green-500/10"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg text-green-600">Congratulations!</h3>
+                  <p className="text-sm text-muted-foreground mt-1">You have become a verified driver.</p>
+                  <p className="text-xs text-muted-foreground mt-2">Click here to publish your first ride.</p>
+                </div>
+                <button
+                  onClick={handlePopupDismiss}
+                  className="flex-shrink-0 p-1 hover:bg-green-500/20 rounded-full transition-colors"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+              <Button
+                onClick={handlePopupClick}
+                className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
+              >
+                Go to Publish Ride
+              </Button>
+            </motion.div>
+          )}
 
           <Tabs defaultValue={isDriver ? "rides" : "bookings"}>
             <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">

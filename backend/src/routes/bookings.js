@@ -63,15 +63,6 @@ router.post(
         return res.status(400).json({ message: "You cannot book your own ride." });
       }
 
-      const existing = await Booking.findOne({
-        rideId,
-        passengerId: req.user._id,
-        status: "confirmed",
-      });
-      if (existing) {
-        return res.status(409).json({ message: "You have already booked this ride." });
-      }
-
       if (ride.seatsAvailable < Number(seats)) {
         return res.status(400).json({ message: `Only ${ride.seatsAvailable} seat(s) available.` });
       }
@@ -85,11 +76,18 @@ router.post(
       ride.seatsAvailable -= Number(seats);
       await ride.save();
 
+      // Emit real-time event for new booking
+      const bookingWithDetails = await Booking.findById(booking._id)
+        .populate("passengerId", "fullName avatarUrl phone email")
+        .populate("rideId", "origin destination departureAt pricePerSeat seatsTotal")
+        .lean();
+
+      global.io.to(`driver_${ride.driverId}`).emit("new_booking", bookingWithDetails);
+      global.io.to(`user_${req.user._id}`).emit("booking_created", bookingWithDetails);
+      global.io.emit("ride_updated", ride);
+
       res.status(201).json(booking);
     } catch (err) {
-      if (err.code === 11000) {
-        return res.status(409).json({ message: "You have already booked this ride." });
-      }
       res.status(500).json({ message: err.message });
     }
   }
@@ -110,9 +108,16 @@ router.patch("/:id/cancel", protect, async (req, res) => {
     booking.status = "cancelled";
     await booking.save();
 
-    await Ride.findByIdAndUpdate(booking.rideId, {
+    const ride = await Ride.findByIdAndUpdate(booking.rideId, {
       $inc: { seatsAvailable: booking.seats },
     });
+
+    // Emit real-time event for booking cancellation
+    global.io.to(`user_${req.user._id}`).emit("booking_cancelled", booking);
+    if (ride) {
+      global.io.to(`driver_${ride.driverId}`).emit("booking_cancelled", booking);
+      global.io.emit("ride_updated", ride);
+    }
 
     res.json(booking);
   } catch (err) {

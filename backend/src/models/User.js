@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema(
       default: "passenger",
       required: true,
     },
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
     phone: {
       type: String,
       default: null,
@@ -36,11 +40,62 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    avatarPublicId: {
+      type: String,
+      default: null,
+    },
     vehicleSeats: {
       type: Number,
       min: 1,
       max: 8,
       default: null,
+    },
+    vehicleNumber: {
+      type: String,
+      default: null,
+    },
+    earnings: {
+      type: Number,
+      default: 0,
+    },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
+    hasSeenApprovalNotification: {
+      type: Boolean,
+      default: false,
+    },
+    // Driver verification documents
+    drivingLicense: {
+      frontUrl: { type: String, default: null },
+      frontPublicId: { type: String, default: null },
+      backUrl: { type: String, default: null },
+      backPublicId: { type: String, default: null },
+    },
+    aadharCard: {
+      frontUrl: { type: String, default: null },
+      frontPublicId: { type: String, default: null },
+      backUrl: { type: String, default: null },
+      backPublicId: { type: String, default: null },
+    },
+    panCard: {
+      frontUrl: { type: String, default: null },
+      frontPublicId: { type: String, default: null },
+    },
+    rc: {
+      frontUrl: { type: String, default: null },
+      frontPublicId: { type: String, default: null },
+      backUrl: { type: String, default: null },
+      backPublicId: { type: String, default: null },
+    },
+    vehicleImage: {
+      url: { type: String, default: null },
+      publicId: { type: String, default: null },
     },
     bankAccountNumber: {
       type: String,

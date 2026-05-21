@@ -27,6 +27,4 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-bookingSchema.index({ rideId: 1, passengerId: 1 }, { unique: true });
-
 module.exports = mongoose.model("Booking", bookingSchema);

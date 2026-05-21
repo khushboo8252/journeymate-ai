@@ -58,7 +58,7 @@ router.get("/my", protect, async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id)
-      .populate("driverId", "fullName avatarUrl phone")
+      .populate("driverId", "fullName avatarUrl phone vehicleSeats isProfileComplete role")
       .lean();
     if (!ride) return res.status(404).json({ message: "Ride not found." });
     res.json(ride);
@@ -78,6 +78,7 @@ router.post(
     body("departureAt").isISO8601().withMessage("Valid departure date/time required"),
     body("seatsTotal").isInt({ min: 1, max: 8 }).withMessage("Seats must be between 1 and 8"),
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
+    body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -85,7 +86,7 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { origin, destination, departureAt, seatsTotal, pricePerSeat, description } = req.body;
+    const { origin, destination, departureAt, arrivalAt, seatsTotal, pricePerSeat, description } = req.body;
 
     try {
       const ride = await Ride.create({
@@ -93,11 +94,17 @@ router.post(
         origin,
         destination,
         departureAt: new Date(departureAt),
+        arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
         seatsTotal: Number(seatsTotal),
         seatsAvailable: Number(seatsTotal),
         pricePerSeat: Number(pricePerSeat),
         description: description || null,
       });
+
+      // Emit real-time event for new ride
+      global.io.emit("ride_created", ride);
+      global.io.to(`driver_${req.user._id}`).emit("driver_ride_created", ride);
+
       res.status(201).json(ride);
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -120,10 +127,20 @@ router.patch("/:id/cancel", protect, restrictTo("driver"), async (req, res) => {
     ride.status = "cancelled";
     await ride.save();
 
-    await Booking.updateMany(
+    const bookings = await Booking.updateMany(
       { rideId: ride._id, status: "confirmed" },
       { status: "cancelled" }
     );
+
+    // Emit real-time event for ride cancellation
+    global.io.emit("ride_cancelled", ride);
+    global.io.to(`driver_${req.user._id}`).emit("driver_ride_cancelled", ride);
+
+    // Notify passengers who booked this ride
+    const confirmedBookings = await Booking.find({ rideId: ride._id, status: "cancelled" });
+    confirmedBookings.forEach((booking) => {
+      global.io.to(`user_${booking.passengerId}`).emit("ride_cancelled", ride);
+    });
 
     res.json(ride);
   } catch (err) {

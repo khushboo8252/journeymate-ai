@@ -2,6 +2,7 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const { protect, restrictTo } = require("../middleware/auth");
+const { sendDriverApprovalRequestEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ router.put(
     body("fullName").optional().trim().isLength({ min: 2 }).withMessage("Name must be at least 2 characters"),
     body("phone").optional().trim(),
     body("avatarUrl").optional().trim(),
+    body("avatarPublicId").optional().trim(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -25,7 +27,7 @@ router.put(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { fullName, phone, avatarUrl } = req.body;
+    const { fullName, phone, avatarUrl, avatarPublicId } = req.body;
 
     try {
       const user = await User.findByIdAndUpdate(
@@ -34,6 +36,7 @@ router.put(
           ...(fullName && { fullName }),
           ...(phone !== undefined && { phone }),
           ...(avatarUrl !== undefined && { avatarUrl }),
+          ...(avatarPublicId !== undefined && { avatarPublicId }),
         },
         { new: true, runValidators: true }
       );
@@ -53,6 +56,7 @@ router.put(
     body("fullName").optional().trim().isLength({ min: 2 }).withMessage("Name must be at least 2 characters"),
     body("phone").trim().notEmpty().withMessage("Phone number is required"),
     body("avatarUrl").optional().trim(),
+    body("avatarPublicId").optional().trim(),
     body("vehicleSeats")
       .isInt({ min: 1, max: 8 })
       .withMessage("Vehicle seats must be between 1 and 8"),
@@ -71,7 +75,7 @@ router.put(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { fullName, phone, avatarUrl, vehicleSeats, bankAccountNumber, ifscCode } = req.body;
+    const { fullName, phone, avatarUrl, avatarPublicId, vehicleSeats, bankAccountNumber, ifscCode, vehicleNumber, drivingLicense, aadharCard, panCard, rc, vehicleImage } = req.body;
 
     try {
       const user = await User.findByIdAndUpdate(
@@ -80,14 +84,26 @@ router.put(
           ...(fullName && { fullName }),
           phone,
           ...(avatarUrl !== undefined && { avatarUrl }),
+          ...(avatarPublicId !== undefined && { avatarPublicId }),
           vehicleSeats: Number(vehicleSeats),
           bankAccountNumber,
           ifscCode: ifscCode.toUpperCase(),
+          ...(vehicleNumber && { vehicleNumber }),
+          ...(drivingLicense && { drivingLicense }),
+          ...(aadharCard && { aadharCard }),
+          ...(panCard && { panCard }),
+          ...(rc && { rc }),
+          ...(vehicleImage && { vehicleImage }),
           isProfileComplete: true,
+          isApproved: false, // Requires admin approval
         },
         { new: true, runValidators: true }
       );
-      res.json({ status: "success", user: user.toPublic() });
+
+      // Send email notification to admin
+      await sendDriverApprovalRequestEmail(user);
+
+      res.json({ status: "success", user: user.toPublic(), requiresApproval: true });
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
@@ -108,6 +124,16 @@ router.get("/driver/banking", protect, restrictTo("driver"), async (req, res) =>
         ifscCode: user.ifscCode,
       },
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/profile/notification-seen — mark approval notification as seen
+router.post("/notification-seen", protect, restrictTo("driver"), async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, { hasSeenApprovalNotification: true });
+    res.json({ status: "success" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

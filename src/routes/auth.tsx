@@ -97,7 +97,7 @@ function SignUpForm() {
   const [showPw, setShowPw] = useState(false);
   const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { role: "passenger" },
+    defaultValues: { role: "driver" },
   });
   const selectedRole = watch("role");
 
@@ -133,8 +133,8 @@ function SignUpForm() {
             <SelectValue placeholder="Select role" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="passenger">Passenger</SelectItem>
             <SelectItem value="driver">Driver</SelectItem>
+            <SelectItem value="passenger">Passenger</SelectItem>
           </SelectContent>
         </Select>
       </div>

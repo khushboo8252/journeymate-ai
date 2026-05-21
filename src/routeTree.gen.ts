@@ -17,6 +17,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RidesRideIdRouteImport } from './routes/rides.$rideId'
+import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
 
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
@@ -58,6 +60,16 @@ const RidesRideIdRoute = RidesRideIdRouteImport.update({
   path: '/rides/$rideId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDashboardRoute = AdminDashboardRouteImport.update({
+  id: '/admin/dashboard',
+  path: '/admin/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -67,6 +79,8 @@ export interface FileRoutesByFullPath {
   '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +91,8 @@ export interface FileRoutesByTo {
   '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
 }
 export interface FileRoutesById {
@@ -88,6 +104,8 @@ export interface FileRoutesById {
   '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
+  '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +118,8 @@ export interface FileRouteTypes {
     | '/driver-setup'
     | '/publish'
     | '/search'
+    | '/admin/dashboard'
+    | '/admin/login'
     | '/rides/$rideId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +130,8 @@ export interface FileRouteTypes {
     | '/driver-setup'
     | '/publish'
     | '/search'
+    | '/admin/dashboard'
+    | '/admin/login'
     | '/rides/$rideId'
   id:
     | '__root__'
@@ -120,6 +142,8 @@ export interface FileRouteTypes {
     | '/driver-setup'
     | '/publish'
     | '/search'
+    | '/admin/dashboard'
+    | '/admin/login'
     | '/rides/$rideId'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +155,8 @@ export interface RootRouteChildren {
   DriverSetupRoute: typeof DriverSetupRoute
   PublishRoute: typeof PublishRoute
   SearchRoute: typeof SearchRoute
+  AdminDashboardRoute: typeof AdminDashboardRoute
+  AdminLoginRoute: typeof AdminLoginRoute
   RidesRideIdRoute: typeof RidesRideIdRoute
 }
 
@@ -192,6 +218,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RidesRideIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/dashboard': {
+      id: '/admin/dashboard'
+      path: '/admin/dashboard'
+      fullPath: '/admin/dashboard'
+      preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -203,6 +243,8 @@ const rootRouteChildren: RootRouteChildren = {
   DriverSetupRoute: DriverSetupRoute,
   PublishRoute: PublishRoute,
   SearchRoute: SearchRoute,
+  AdminDashboardRoute: AdminDashboardRoute,
+  AdminLoginRoute: AdminLoginRoute,
   RidesRideIdRoute: RidesRideIdRoute,
 }
 export const routeTree = rootRouteImport

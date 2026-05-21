@@ -1,16 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { format } from "date-fns";
-import { ArrowRight, Calendar, IndianRupee, MapPin, Users } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { format, differenceInMinutes } from "date-fns";
+import { IndianRupee, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface RideCardProps {
   id: string;
   origin: string;
   destination: string;
   departureAt: string;
+  arrivalAt?: string | null;
   seatsAvailable: number;
   pricePerSeat: number;
   driver?: {
@@ -20,73 +20,114 @@ interface RideCardProps {
   index?: number;
 }
 
-export function RideCard({ id, origin, destination, departureAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {
+function formatDuration(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+}
+
+export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {
   const departure = new Date(departureAt);
+  const arrival = arrivalAt ? new Date(arrivalAt) : null;
+  const durationMins = arrival ? differenceInMinutes(arrival, departure) : null;
+
   const initials = driver?.fullName
     ? driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
     : "?";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.06 }}
-      className="group glass rounded-2xl p-5 hover:border-primary/40 transition-all duration-300 hover:-translate-y-1"
+      transition={{ duration: 0.35, delay: index * 0.05 }}
+      className="group glass rounded-2xl p-5 hover:border-primary/40 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        {/* Route */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 text-lg font-semibold">
-            <MapPin className="h-4 w-4 text-primary shrink-0" />
-            <span className="truncate">{origin}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="truncate">{destination}</span>
+      <Link to="/rides/$rideId" params={{ rideId: id }} className="block">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+
+          {/* ── Timeline ── */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Departure */}
+            <div className="text-center shrink-0">
+              <p className="text-xl font-bold tabular-nums">{format(departure, "HH:mm")}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[80px]">{origin}</p>
+            </div>
+
+            {/* Progress line + duration */}
+            <div className="flex-1 flex flex-col items-center gap-0.5 min-w-[60px]">
+              {durationMins !== null && (
+                <span className="text-xs text-muted-foreground">{formatDuration(durationMins)}</span>
+              )}
+              <div className="relative w-full flex items-center">
+                <div className="h-px flex-1 bg-border" />
+                <div className="h-1.5 w-1.5 rounded-full bg-primary mx-1 shrink-0" />
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <span className="text-xs text-muted-foreground">{seatsAvailable} seat{seatsAvailable !== 1 ? "s" : ""}</span>
+            </div>
+
+            {/* Arrival */}
+            {arrival ? (
+              <div className="text-center shrink-0">
+                <p className="text-xl font-bold tabular-nums">{format(arrival, "HH:mm")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[80px]">{destination}</p>
+              </div>
+            ) : (
+              <div className="text-center shrink-0">
+                <p className="text-xs text-muted-foreground font-medium truncate max-w-[80px]">{destination}</p>
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" />
-              {format(departure, "EEE, d MMM")}
-            </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" />
-              {format(departure, "h:mm a")}
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />
-              {seatsAvailable} seat{seatsAvailable !== 1 ? "s" : ""} left
-            </span>
+
+          {/* ── Driver info ── */}
+          <div className="flex items-center gap-2.5 sm:border-l sm:border-border/40 sm:pl-5">
+            <Avatar className="h-9 w-9 border border-border/40 shrink-0">
+              <AvatarImage src={driver?.avatarUrl ?? undefined} />
+              <AvatarFallback className="text-xs bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-semibold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="text-sm font-medium leading-tight">{driver?.fullName ?? "Driver"}</p>
+              <span className="inline-flex items-center gap-1 text-xs text-primary mt-0.5">
+                <Zap className="h-3 w-3" />Instant Booking
+              </span>
+            </div>
           </div>
+
+          {/* ── Price + CTA ── */}
+          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3 sm:gap-2 sm:border-l sm:border-border/40 sm:pl-5">
+            <div className="flex items-baseline gap-0.5">
+              <IndianRupee className="h-4 w-4 text-foreground" />
+              <span className="text-2xl font-bold tabular-nums">{Number(pricePerSeat).toLocaleString("en-IN")}</span>
+              <span className="text-xs text-muted-foreground">.00</span>
+            </div>
+            <Button
+              size="sm"
+              className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20 whitespace-nowrap shrink-0"
+              onClick={e => e.stopPropagation()}
+              asChild
+            >
+              <Link to="/rides/$rideId" params={{ rideId: id }}>View ride</Link>
+            </Button>
+          </div>
+
         </div>
 
-        {/* Driver */}
-        <div className="flex items-center gap-2">
-          <Avatar className="h-8 w-8 border border-border/40">
-            <AvatarFallback className="text-xs bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-semibold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <span className="text-sm text-muted-foreground hidden sm:block">{driver?.fullName ?? "Driver"}</span>
-        </div>
-
-        {/* Price + CTA */}
-        <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-1">
-          <div className="flex items-center gap-0.5 text-xl font-bold text-gradient">
-            <IndianRupee className="h-4 w-4" />
-            {Number(pricePerSeat).toLocaleString("en-IN")}
+        {/* ── Seats warning ── */}
+        {seatsAvailable === 0 && (
+          <div className="mt-3 pt-3 border-t border-border/30 text-center text-xs text-destructive font-medium">
+            No seats available
           </div>
-          <Badge variant="secondary" className="text-xs hidden sm:block">per seat</Badge>
-        </div>
-
-        <Link to="/rides/$rideId" params={{ rideId: id }}>
-          <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20 whitespace-nowrap">
-            View ride
-          </Button>
-        </Link>
-      </div>
-
-      {seatsAvailable === 0 && (
-        <div className="mt-3 text-center text-xs text-destructive font-medium">No seats available</div>
-      )}
+        )}
+        {seatsAvailable === 1 && (
+          <div className="mt-3 pt-3 border-t border-border/30 text-center text-xs text-amber-400 font-medium">
+            Only 1 seat left — book fast!
+          </div>
+        )}
+      </Link>
     </motion.div>
   );
 }
