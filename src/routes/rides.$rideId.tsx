@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { SeatPicker, type Seat } from "@/components/seat-picker/SeatPicker";
 
 export const Route = createFileRoute("/rides/$rideId")({
   head: () => ({
@@ -38,188 +39,6 @@ type RideWithDriver = ApiRide & {
   driverId: ApiUser | null;
 };
 
-function SeatPicker({
-  total,
-  available,
-  selectedSeats,
-  onToggle,
-}: {
-  total: number;
-  available: number;
-  selectedSeats: number[];
-  onToggle: (n: number) => void;
-}) {
-  const bookedCount = total - available;
-  
-  console.log("SeatPicker received:", { total, available, bookedCount });
-
-  // Build row structure: front (driver + passenger), middle, back
-  const rows: { label: string; seats: number[]; isDriverRow?: boolean }[] = [];
-
-  // Front row: Driver (always seat 1) + passenger (seat 2 if total >= 2)
-  rows.push({
-    label: "Front",
-    seats: [1, total >= 2 ? 2 : null].filter(Boolean) as number[],
-    isDriverRow: true,
-  });
-
-  // Middle row: seats 3,4,5 (if total >= 3)
-  if (total >= 3) {
-    const middleSeats = [];
-    for (let i = 3; i <= Math.min(5, total); i++) {
-      middleSeats.push(i);
-    }
-    if (middleSeats.length > 0) {
-      rows.push({
-        label: "Middle",
-        seats: middleSeats,
-      });
-    }
-  }
-
-  // Back row: remaining seats (6,7,8...)
-  if (total >= 6) {
-    const backSeats = [];
-    for (let i = 6; i <= total; i++) {
-      backSeats.push(i);
-    }
-    if (backSeats.length > 0) {
-      rows.push({
-        label: "Back",
-        seats: backSeats,
-      });
-    }
-  }
-
-  // Determine which seats are booked
-  // Driver seat (1) is always booked
-  const bookedSet = new Set<number>([1]);
-  // Distribute other booked seats starting from seat 2
-  // bookedCount includes driver, so subtract 1 to get other booked seats
-  const otherBooked = Math.max(0, bookedCount - 1);
-  for (let i = 2; i <= total && bookedSet.size < 1 + otherBooked; i++) {
-    bookedSet.add(i);
-  }
-
-  const getSeatLabel = (seat: number, rowSeats: number[]) => {
-    const idx = rowSeats.indexOf(seat);
-    const len = rowSeats.length;
-    if (len === 1) return "";
-    if (idx === 0) return "Window";
-    if (idx === len - 1) return "Window";
-    return "Middle";
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Legend */}
-      <div className="flex items-center gap-5 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-5 rounded-t-lg border-2 border-muted-foreground/20 bg-muted/60" />
-          Booked
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-5 rounded-t-lg border-2 border-border bg-background/60" />
-          Available
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-5 rounded-t-lg border-2 border-primary bg-primary" />
-          Selected
-        </span>
-      </div>
-
-      {/* Car rows */}
-      <div className="space-y-5">
-        {rows.map(row => (
-          <div key={row.label} className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {row.label} row
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <div className="flex gap-3 flex-wrap justify-center">
-                {row.seats.map(seatNum => {
-                  const isBooked = bookedSet.has(seatNum);
-                  const isSelected = selectedSeats.includes(seatNum);
-                  const isDriver = seatNum === 1;
-                  const seatLabel = getSeatLabel(seatNum, row.seats);
-
-                  return (
-                    <button
-                      key={seatNum}
-                      disabled={isBooked}
-                      onClick={() => !isBooked && onToggle(seatNum)}
-                      title={isBooked ? "Already booked" : isSelected ? "Click to deselect" : "Click to select"}
-                      className={cn(
-                        "group relative flex flex-col items-center justify-between pb-1.5 pt-2.5 rounded-t-2xl border-2 w-14 h-16 transition-all duration-150 select-none",
-                        isBooked && "bg-muted/50 border-muted-foreground/20 cursor-not-allowed opacity-60",
-                        !isBooked && !isSelected && "bg-background/60 border-border hover:border-primary/70 hover:bg-primary/5 cursor-pointer active:scale-95",
-                        isSelected && "bg-primary border-primary shadow-lg shadow-primary/30 cursor-pointer active:scale-95"
-                      )}
-                    >
-                      {/* Seat number */}
-                      <span
-                        className={cn(
-                          "text-xs font-semibold leading-none z-10",
-                          isBooked && "text-muted-foreground/40",
-                          !isBooked && !isSelected && "text-muted-foreground group-hover:text-primary",
-                          isSelected && "text-primary-foreground"
-                        )}
-                      >
-                        {isDriver ? "D" : seatNum}
-                      </span>
-
-                      {/* Seat label (Window/Middle) */}
-                      {seatLabel && (
-                        <span
-                          className={cn(
-                            "text-[9px] leading-none",
-                            isBooked && "text-muted-foreground/30",
-                            !isBooked && !isSelected && "text-muted-foreground/60",
-                            isSelected && "text-primary-foreground/80"
-                          )}
-                        >
-                          {seatLabel}
-                        </span>
-                      )}
-
-                      {/* Seat cushion strip at bottom */}
-                      <div
-                        className={cn(
-                          "w-full h-2.5 rounded-b-sm absolute bottom-0 left-0 right-0",
-                          isBooked && "bg-muted-foreground/10",
-                          !isBooked && !isSelected && "bg-muted/70",
-                          isSelected && "bg-white/20"
-                        )}
-                      />
-
-                      {/* Booked X mark */}
-                      {isBooked && !isDriver && (
-                        <span className="text-[10px] text-muted-foreground/50 font-bold leading-none">✕</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {row.isDriverRow && (
-                <div className="w-16 h-10 rounded-lg border border-dashed border-muted-foreground/30 flex items-center justify-center text-xs text-muted-foreground/50">
-                  Steering
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Selection summary */}
-      {selectedSeats.length > 0 && (
-        <p className="text-sm text-primary font-medium">
-          {selectedSeats.length} seat{selectedSeats.length > 1 ? "s" : ""} selected (seat{selectedSeats.length > 1 ? "s" : ""} {selectedSeats.sort((a,b)=>a-b).join(", ")})
-        </p>
-      )}
-    </div>
-  );
-}
-
 function RideDetailPage() {
   const { rideId } = Route.useParams();
   const { user, loading: authLoading } = useAuth();
@@ -227,18 +46,21 @@ function RideDetailPage() {
 
   const [ride, setRide] = useState<RideWithDriver | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSeats, setSelectedSeats] = useState<number[]>([]);
+  const [seats, setSeats] = useState<Seat[]>([]);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
+  const [lockingSeats, setLockingSeats] = useState(false);
 
-  const toggleSeat = (n: number) => {
+  const toggleSeat = (seatNumber: string) => {
     setSelectedSeats(prev =>
-      prev.includes(n) ? prev.filter(s => s !== n) : [...prev, n]
+      prev.includes(seatNumber) ? prev.filter(s => s !== seatNumber) : [...prev, seatNumber]
     );
   };
 
   useEffect(() => {
     fetchRide();
+    fetchSeats();
   }, [rideId]);
 
   useEffect(() => {
@@ -253,6 +75,41 @@ function RideDetailPage() {
       setRide(null);
     }
     setLoading(false);
+  };
+
+  const fetchSeats = async () => {
+    try {
+      const data = await api.get<Seat[]>(`/api/rides/${rideId}/seats`);
+      setSeats(data);
+    } catch (error) {
+      console.error("Failed to fetch seats:", error);
+    }
+  };
+
+  const lockSeats = async (seatNumbers: string[]) => {
+    if (!user) return;
+    try {
+      setLockingSeats(true);
+      await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers });
+      // Refresh seats to get updated status
+      await fetchSeats();
+    } catch (error) {
+      console.error("Failed to lock seats:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to lock seats");
+      setSelectedSeats([]);
+    } finally {
+      setLockingSeats(false);
+    }
+  };
+
+  const releaseAllLockedSeats = async () => {
+    if (!user) return;
+    try {
+      await api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats });
+      await fetchSeats();
+    } catch (error) {
+      console.error("Failed to release seats:", error);
+    }
   };
 
   const checkExistingBooking = async () => {
@@ -272,17 +129,23 @@ function RideDetailPage() {
   const bookRide = async () => {
     if (!user) { navigate({ to: "/auth" }); return; }
     if (!ride) return;
-    const seatsNum = selectedSeats.length;
-    if (seatsNum === 0) { toast.error("Please select at least one seat."); return; }
+    if (selectedSeats.length === 0) { toast.error("Please select at least one seat."); return; }
     setBooking(true);
     try {
-      await api.post("/api/bookings", { rideId: ride._id, seats: seatsNum });
-      toast.success(`${seatsNum} seat${seatsNum > 1 ? "s" : ""} booked! Have a great journey.`);
+      // First lock the seats (IRCTC style - lock only on book button click)
+      await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
+      
+      // Then proceed with booking
+      await api.post("/api/bookings", { rideId: ride._id, seatNumbers: selectedSeats });
+      toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
       setAlreadyBooked(true);
       setSelectedSeats([]);
       fetchRide();
+      fetchSeats();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Booking failed");
+      // Refresh seats to show current status
+      fetchSeats();
     }
     setBooking(false);
   };
@@ -352,14 +215,15 @@ function RideDetailPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-base">Select your seat{selectedSeats.length > 1 ? "s" : ""}</h3>
                     <span className="text-xs text-muted-foreground">
-                      {ride.seatsAvailable} of {ride.seatsTotal} available
+                      {seats.filter(s => s.status === 'available').length} of {ride.seatsTotal} available
                     </span>
                   </div>
                   <SeatPicker
-                    total={ride.seatsTotal}
-                    available={ride.seatsAvailable}
+                    rideId={rideId}
+                    seats={seats}
                     selectedSeats={selectedSeats}
-                    onToggle={toggleSeat}
+                    onSeatToggle={toggleSeat}
+                    userId={user?._id}
                   />
                 </div>
               )}

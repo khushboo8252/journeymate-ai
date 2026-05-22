@@ -66,6 +66,7 @@ export interface ApiRide {
   seatsAvailable: number;
   pricePerSeat: number;
   description: string | null;
+  vehicleType?: "hatchback" | "sedan" | "suv" | "mpv" | "van";
   status: "active" | "completed" | "cancelled";
   createdAt: string;
 }

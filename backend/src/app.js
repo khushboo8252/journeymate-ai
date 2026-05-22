@@ -4,6 +4,8 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+const cron = require("node-cron");
+const { releaseExpiredLocks } = require("./jobs/seatLockExpiry");
 
 const authRoutes = require("./routes/auth");
 const ridesRoutes = require("./routes/rides");
@@ -11,6 +13,7 @@ const bookingsRoutes = require("./routes/bookings");
 const profileRoutes = require("./routes/profile");
 const adminRoutes = require("./routes/admin");
 const uploadRoutes = require("./routes/upload");
+const seatsRoutes = require("./routes/seats");
 
 const app = express();
 const httpServer = createServer(app);
@@ -57,6 +60,7 @@ app.use("/api/bookings", bookingsRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api", seatsRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
@@ -95,6 +99,30 @@ mongoose
         console.log(`Driver ${driverId} joined their room`);
       });
 
+      // Join ride-specific room for real-time seat updates
+      socket.on("join_ride", (rideId) => {
+        socket.join(`ride_${rideId}`);
+        console.log(`Client joined ride room: ${rideId}`);
+      });
+
+      // Leave ride-specific room
+      socket.on("leave_ride", (rideId) => {
+        socket.leave(`ride_${rideId}`);
+        console.log(`Client left ride room: ${rideId}`);
+      });
+
+      // Handle seat lock requests
+      socket.on("seat_lock", async (data) => {
+        // This is handled via API routes, but we can add validation here if needed
+        console.log(`Seat lock request:`, data);
+      });
+
+      // Handle seat release requests
+      socket.on("seat_release", async (data) => {
+        // This is handled via API routes, but we can add validation here if needed
+        console.log(`Seat release request:`, data);
+      });
+
       socket.on("disconnect", () => {
         console.log(`❌ Client disconnected: ${socket.id}`);
       });
@@ -104,6 +132,12 @@ mongoose
       console.log(`🚀 RideWave API running on http://localhost:${PORT}`);
       console.log(`🔌 WebSocket server ready`);
     });
+
+    // Schedule seat lock expiry job to run every minute
+    cron.schedule('* * * * *', () => {
+      releaseExpiredLocks(io);
+    });
+    console.log(`⏰ Seat lock expiry cron job scheduled (every minute)`);
   })
   .catch((err) => {
     console.error("❌ MongoDB connection failed:", err.message);

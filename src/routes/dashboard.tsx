@@ -11,6 +11,7 @@ import {
   ExternalLink,
   IndianRupee,
   Lock,
+  Loader2,
   LogOut,
   MapPin,
   Phone,
@@ -32,9 +33,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiBooking, ApiUser } from "@/lib/api";
+import { DriverSeatMap, type Seat as DriverSeat } from "@/components/driver/DriverSeatMap";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -67,6 +70,9 @@ function DashboardPage() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [showApprovalPopup, setShowApprovalPopup] = useState(false);
+  const [selectedRideForSeatMap, setSelectedRideForSeatMap] = useState<ApiRide | null>(null);
+  const [seatsForMap, setSeatsForMap] = useState<DriverSeat[]>([]);
+  const [loadingSeats, setLoadingSeats] = useState(false);
   const isDriver = user?.role === "driver";
 
   useEffect(() => {
@@ -159,22 +165,53 @@ function DashboardPage() {
   const fetchData = async () => {
     if (!user) return;
     try {
-      const promises: [Promise<ApiRide[]>, Promise<BookingWithRide[]>, Promise<DriverBooking[]>] = [
+      const basePromises: [Promise<ApiRide[]>, Promise<BookingWithRide[]>] = [
         api.get<ApiRide[]>("/api/rides/my"),
         api.get<BookingWithRide[]>("/api/bookings/my"),
-        user.role === "driver"
-          ? api.get<DriverBooking[]>("/api/bookings/driver")
-          : Promise.resolve([]),
       ];
-      const [rides, bookings, drvrBookings] = await Promise.all(promises);
-      setMyRides(Array.isArray(rides) ? rides : []);
-      setMyBookings(Array.isArray(bookings) ? bookings : []);
-      setDriverBookings(Array.isArray(drvrBookings) ? drvrBookings : []);
-    } catch {
-      setMyRides([]);
-      setMyBookings([]);
-      setDriverBookings([]);
+      
+      let driverBookingsRes: DriverBooking[] = [];
+      if (isDriver) {
+        const [ridesRes, bookingsRes, driverRes] = await Promise.all([
+          ...basePromises,
+          api.get<DriverBooking[]>("/api/bookings/driver")
+        ]);
+        setMyRides(ridesRes);
+        setMyBookings(bookingsRes);
+        driverBookingsRes = driverRes;
+      } else {
+        const [ridesRes, bookingsRes] = await Promise.all(basePromises);
+        setMyRides(ridesRes);
+        setMyBookings(bookingsRes);
+      }
+      
+      setDriverBookings(driverBookingsRes);
+    } catch (err) {
+      console.error("Failed to fetch data:", err);
     }
+  };
+
+  const fetchSeatsForRide = async (rideId: string) => {
+    try {
+      setLoadingSeats(true);
+      const response = await api.get<{ seats: DriverSeat[] }>(`/api/rides/${rideId}/seats/passengers`);
+      setSeatsForMap(response.seats);
+    } catch (err) {
+      console.error("Failed to fetch seats:", err);
+      toast.error("Failed to load seat map");
+    } finally {
+      setLoadingSeats(false);
+    }
+  };
+
+  const openSeatMap = (ride: ApiRide) => {
+    setSelectedRideForSeatMap(ride);
+    fetchSeatsForRide(ride._id);
+  };
+
+  const closeSeatMap = () => {
+    setSelectedRideForSeatMap(null);
+    setSeatsForMap([]);
   };
 
   const saveProfile = async () => {
@@ -371,9 +408,14 @@ function DashboardPage() {
                       {ride.status}
                     </Badge>
                     {ride.status === "active" && (
-                      <Button size="sm" variant="ghost" onClick={() => cancelRide(ride._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
+                          <Users className="h-4 w-4 mr-1" />Seat Map
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => cancelRide(ride._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -544,6 +586,27 @@ function DashboardPage() {
           </Tabs>
         </motion.div>
       </main>
+
+      {/* Seat Map Dialog */}
+      <Dialog open={selectedRideForSeatMap !== null} onOpenChange={closeSeatMap}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Seat Map - {selectedRideForSeatMap?.origin} to {selectedRideForSeatMap?.destination}</DialogTitle>
+          </DialogHeader>
+          {loadingSeats ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : selectedRideForSeatMap ? (
+            <DriverSeatMap
+              rideId={selectedRideForSeatMap._id}
+              seats={seatsForMap}
+              vehicleType={selectedRideForSeatMap.vehicleType || 'sedan'}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       <Footer />
     </div>
   );

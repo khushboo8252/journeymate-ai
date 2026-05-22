@@ -52,6 +52,11 @@ const rideSchema = new mongoose.Schema(
       enum: ["active", "completed", "cancelled"],
       default: "active",
     },
+    vehicleType: {
+      type: String,
+      enum: ["hatchback", "sedan", "suv", "mpv", "van"],
+      default: "sedan",
+    },
   },
   { timestamps: true }
 );

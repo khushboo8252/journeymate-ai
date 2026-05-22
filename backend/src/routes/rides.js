@@ -2,7 +2,9 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
+const Seat = require("../models/Seat");
 const { protect, restrictTo } = require("../middleware/auth");
+const { generateSeats, getTotalSeats } = require("../utils/seatGenerator");
 
 const router = express.Router();
 
@@ -76,9 +78,9 @@ router.post(
     body("origin").trim().isLength({ min: 2 }).withMessage("Origin is required"),
     body("destination").trim().isLength({ min: 2 }).withMessage("Destination is required"),
     body("departureAt").isISO8601().withMessage("Valid departure date/time required"),
-    body("seatsTotal").isInt({ min: 1, max: 8 }).withMessage("Seats must be between 1 and 8"),
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
+    body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -86,20 +88,28 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { origin, destination, departureAt, arrivalAt, seatsTotal, pricePerSeat, description } = req.body;
+    const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan" } = req.body;
 
     try {
+      // Get total seats based on vehicle type
+      const seatsTotal = getTotalSeats(vehicleType);
+
       const ride = await Ride.create({
         driverId: req.user._id,
         origin,
         destination,
         departureAt: new Date(departureAt),
         arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
-        seatsTotal: Number(seatsTotal),
-        seatsAvailable: Number(seatsTotal),
+        seatsTotal,
+        seatsAvailable: seatsTotal - 1, // Minus driver seat
         pricePerSeat: Number(pricePerSeat),
         description: description || null,
+        vehicleType,
       });
+
+      // Auto-generate seats for the ride
+      const seatData = generateSeats(ride._id, vehicleType);
+      await Seat.insertMany(seatData);
 
       // Emit real-time event for new ride
       global.io.emit("ride_created", ride);
@@ -107,6 +117,7 @@ router.post(
 
       res.status(201).json(ride);
     } catch (err) {
+      console.error("Create ride error:", err);
       res.status(500).json({ message: err.message });
     }
   }

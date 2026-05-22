@@ -31,7 +31,7 @@ export const Route = createFileRoute("/driver-setup")({
 const schema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   phone: z.string().min(10, "Enter a valid phone number"),
-  vehicleSeats: z.string().min(1, "Select available seats"),
+  vehicleType: z.string().min(1, "Select vehicle type"),
   vehicleNumber: z.string().min(1, "Vehicle number is required"),
   bankAccountNumber: z
     .string()
@@ -74,7 +74,7 @@ function DriverSetupPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       fullName: "",
-      vehicleSeats: "3",
+      vehicleType: "sedan",
     },
   });
 
@@ -82,7 +82,7 @@ function DriverSetupPage() {
     if (!loading && user) {
       setValue("fullName", user.fullName ?? "");
       setValue("phone", user.phone ?? "");
-      if (user.vehicleSeats) setValue("vehicleSeats", String(user.vehicleSeats));
+      if ((user as any).vehicleType) setValue("vehicleType", (user as any).vehicleType);
       if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
       if (user.role !== "driver") navigate({ to: "/dashboard" });
     }
@@ -196,7 +196,7 @@ function DriverSetupPage() {
       const payload: any = {
         fullName: values.fullName,
         phone: values.phone,
-        vehicleSeats: Number(values.vehicleSeats),
+        vehicleType: values.vehicleType,
         vehicleNumber: values.vehicleNumber,
         bankAccountNumber: values.bankAccountNumber,
         ifscCode: values.ifscCode.toUpperCase(),
@@ -362,28 +362,28 @@ function DriverSetupPage() {
               <Separator />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Vehicle number</Label>
-                  <Input placeholder="MH 01 AB 1234" {...register("vehicleNumber")} />
-                  {errors.vehicleNumber && <p className="text-xs text-destructive">{errors.vehicleNumber.message}</p>}
-                </div>
-                <div className="space-y-1.5 max-w-xs">
-                  <Label>Available seats for passengers</Label>
+                  <Label>Vehicle type</Label>
                   <Select
-                    defaultValue="3"
-                    onValueChange={v => setValue("vehicleSeats", v)}
+                    defaultValue="sedan"
+                    onValueChange={v => setValue("vehicleType", v)}
                   >
                     <SelectTrigger className="bg-background/60 border-border/40">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[ 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(n => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n} seat{n > 1 ? "s" : ""}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="hatchback">Hatchback (5 seats)</SelectItem>
+                      <SelectItem value="sedan">Sedan (5 seats)</SelectItem>
+                      <SelectItem value="suv">SUV (7 seats)</SelectItem>
+                      <SelectItem value="mpv">MPV (7 seats)</SelectItem>
+                      <SelectItem value="van">Van (10 seats)</SelectItem>
                     </SelectContent>
                   </Select>
-                  {errors.vehicleSeats && <p className="text-xs text-destructive">{errors.vehicleSeats.message}</p>}
+                  {errors.vehicleType && <p className="text-xs text-destructive">{errors.vehicleType.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vehicle number</Label>
+                  <Input placeholder="MH 01 AB 1234" {...register("vehicleNumber")} />
+                  {errors.vehicleNumber && <p className="text-xs text-destructive">{errors.vehicleNumber.message}</p>}
                 </div>
               </div>
               <div className="space-y-1.5">

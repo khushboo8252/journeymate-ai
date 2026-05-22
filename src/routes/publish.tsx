@@ -31,7 +31,7 @@ const schema = z.object({
   date: z.string().min(1, "Pick a date"),
   time: z.string().min(1, "Pick a time"),
   arrivalTime: z.string().optional(),
-  seats: z.string().min(1),
+  vehicleType: z.string().min(1, "Select vehicle type"),
   price: z.string().refine(v => Number(v) > 0, "Enter a valid price"),
   description: z.string().optional(),
 });
@@ -44,7 +44,7 @@ function PublishPage() {
 
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { seats: "3" },
+    defaultValues: { vehicleType: "sedan" },
   });
 
   const onSubmit = async (values: FormValues) => {
@@ -55,7 +55,7 @@ function PublishPage() {
         destination: values.destination,
         departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
         arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
-        seatsTotal: Number(values.seats),
+        vehicleType: values.vehicleType,
         pricePerSeat: Number(values.price),
         description: values.description || null,
       });
@@ -127,14 +127,18 @@ function PublishPage() {
                 <Input type="time" {...register("arrivalTime")} />
               </div>
               <div className="space-y-1.5">
-                <Label>Available seats</Label>
-                <Select defaultValue="3" onValueChange={v => setValue("seats", v)}>
+                <Label>Vehicle type</Label>
+                <Select defaultValue="sedan" onValueChange={v => setValue("vehicleType", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[1,2,3,4,5,6].map(n => <SelectItem key={n} value={String(n)}>{n} seat{n > 1 ? "s" : ""}</SelectItem>)}
+                    <SelectItem value="hatchback">Hatchback (5 seats)</SelectItem>
+                    <SelectItem value="sedan">Sedan (5 seats)</SelectItem>
+                    <SelectItem value="suv">SUV (7 seats)</SelectItem>
+                    <SelectItem value="mpv">MPV (7 seats)</SelectItem>
+                    <SelectItem value="van">Van (10 seats)</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.seats && <p className="text-xs text-destructive">{errors.seats.message}</p>}
+                {errors.vehicleType && <p className="text-xs text-destructive">{errors.vehicleType.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Price per seat (₹)</Label>

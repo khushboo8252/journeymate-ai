@@ -18,6 +18,10 @@ const bookingSchema = new mongoose.Schema(
       min: 1,
       default: 1,
     },
+    seatNumbers: {
+      type: [String],
+      default: [],
+    },
     status: {
       type: String,
       enum: ["confirmed", "cancelled"],

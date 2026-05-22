@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { format, differenceInMinutes } from "date-fns";
 import { IndianRupee, Zap } from "lucide-react";
@@ -29,6 +29,7 @@ function formatDuration(minutes: number) {
 }
 
 export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {
+  const navigate = useNavigate();
   const departure = new Date(departureAt);
   const arrival = arrivalAt ? new Date(arrivalAt) : null;
   const durationMins = arrival ? differenceInMinutes(arrival, departure) : null;
@@ -37,14 +38,18 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
     ? driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
     : "?";
 
+  const handleCardClick = () => {
+    navigate({ to: "/rides/$rideId", params: { rideId: id } });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.05 }}
       className="group glass rounded-2xl p-5 hover:border-primary/40 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
+      onClick={handleCardClick}
     >
-      <Link to="/rides/$rideId" params={{ rideId: id }} className="block">
         <div className="flex flex-col sm:flex-row sm:items-center gap-5">
 
           {/* ── Timeline ── */}
@@ -108,9 +113,8 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
               size="sm"
               className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20 whitespace-nowrap shrink-0"
               onClick={e => e.stopPropagation()}
-              asChild
             >
-              <Link to="/rides/$rideId" params={{ rideId: id }}>View ride</Link>
+              View ride
             </Button>
           </div>
 
@@ -127,7 +131,6 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
             Only 1 seat left — book fast!
           </div>
         )}
-      </Link>
     </motion.div>
   );
 }
