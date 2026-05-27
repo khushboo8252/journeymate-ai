@@ -5,6 +5,7 @@ import { z } from "zod";
 import { motion } from "framer-motion";
 import { Car, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -26,19 +27,20 @@ export const Route = createFileRoute("/publish")({
 });
 
 const schema = z.object({
-  origin: z.string().min(2, "Enter departure city"),
-  destination: z.string().min(2, "Enter destination city"),
-  date: z.string().min(1, "Pick a date"),
-  time: z.string().min(1, "Pick a time"),
+  origin: z.string().min(2),
+  destination: z.string().min(2),
+  date: z.string().min(1),
+  time: z.string().min(1),
   arrivalTime: z.string().optional(),
-  vehicleType: z.string().min(1, "Select vehicle type"),
-  price: z.string().refine(v => Number(v) > 0, "Enter a valid price"),
+  vehicleType: z.string().min(1),
+  price: z.string().refine(v => Number(v) > 0),
   description: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 function PublishPage() {
+  const { t } = useTranslation();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -59,10 +61,10 @@ function PublishPage() {
         pricePerSeat: Number(values.price),
         description: values.description || null,
       });
-      toast.success("Ride published! Passengers can now find it.");
+      toast.success(t("publish.success"));
       navigate({ to: "/dashboard" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to publish ride");
+      toast.error(err instanceof Error ? err.message : t("publish.error"));
     }
   };
 
@@ -75,9 +77,9 @@ function PublishPage() {
         <main className="flex-1 flex items-center justify-center px-4 py-24">
           <div className="glass rounded-2xl p-10 text-center max-w-sm w-full">
             <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Sign in required</h2>
+            <h2 className="text-2xl font-bold mb-2">{t("auth.signin")}</h2>
             <p className="text-muted-foreground mb-6">You need to be signed in to publish a ride.</p>
-            <Link to="/auth"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">Sign in</Button></Link>
+            <Link to="/auth"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">{t("auth.signin")}</Button></Link>
           </div>
         </main>
         <Footer />
@@ -95,39 +97,39 @@ function PublishPage() {
               <Car className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Publish a ride</h1>
-              <p className="text-sm text-muted-foreground">Share your route and earn money on fuel</p>
+              <h1 className="text-2xl font-bold">{t("publish.title")}</h1>
+              <p className="text-sm text-muted-foreground">{t("publish.subtitle")}</p>
             </div>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="glass rounded-2xl p-6 space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-1.5">
-                <Label>From</Label>
-                <Input placeholder="Mumbai" {...register("origin")} />
-                {errors.origin && <p className="text-xs text-destructive">{errors.origin.message}</p>}
+                <Label>{t("publish.origin")}</Label>
+                <Input placeholder={t("publish.origin_ph")} {...register("origin")} />
+                {errors.origin && <p className="text-xs text-destructive">{t("publish.origin")}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>To</Label>
-                <Input placeholder="Pune" {...register("destination")} />
-                {errors.destination && <p className="text-xs text-destructive">{errors.destination.message}</p>}
+                <Label>{t("publish.destination")}</Label>
+                <Input placeholder={t("publish.destination_ph")} {...register("destination")} />
+                {errors.destination && <p className="text-xs text-destructive">{t("publish.destination")}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Date</Label>
+                <Label>{t("publish.date")}</Label>
                 <Input type="date" min={new Date().toISOString().split("T")[0]} {...register("date")} />
-                {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
+                {errors.date && <p className="text-xs text-destructive">{t("publish.date")}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Departure time</Label>
+                <Label>{t("publish.departure")}</Label>
                 <Input type="time" {...register("time")} />
-                {errors.time && <p className="text-xs text-destructive">{errors.time.message}</p>}
+                {errors.time && <p className="text-xs text-destructive">{t("publish.departure")}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Arrival time <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Label>{t("publish.arrival")} <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input type="time" {...register("arrivalTime")} />
               </div>
               <div className="space-y-1.5">
-                <Label>Vehicle type</Label>
+                <Label>{t("driver_setup.vehicle_type")}</Label>
                 <Select defaultValue="sedan" onValueChange={v => setValue("vehicleType", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -138,12 +140,12 @@ function PublishPage() {
                     <SelectItem value="van">Van (10 seats)</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.vehicleType && <p className="text-xs text-destructive">{errors.vehicleType.message}</p>}
+                {errors.vehicleType && <p className="text-xs text-destructive">{t("driver_setup.vehicle_type")}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Price per seat (₹)</Label>
-                <Input type="number" placeholder="500" min={1} {...register("price")} />
-                {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
+                <Label>{t("publish.price")}</Label>
+                <Input type="number" placeholder={t("publish.price_ph")} min={1} {...register("price")} />
+                {errors.price && <p className="text-xs text-destructive">{t("publish.price")}</p>}
               </div>
             </div>
 
@@ -153,7 +155,7 @@ function PublishPage() {
             </div>
 
             <Button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold h-12 text-base">
-              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Publish ride"}
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : t("publish.publish")}
             </Button>
           </form>
         </motion.div>

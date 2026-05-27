@@ -58,8 +58,8 @@ router.put(
     body("avatarUrl").optional().trim(),
     body("avatarPublicId").optional().trim(),
     body("vehicleSeats")
-      .isInt({ min: 1, max: 8 })
-      .withMessage("Vehicle seats must be between 1 and 8"),
+      .isInt({ min: 1, max: 15 })
+      .withMessage("Vehicle seats must be between 1 and 15"),
     body("bankAccountNumber")
       .trim()
       .isLength({ min: 9, max: 18 })
@@ -72,7 +72,9 @@ router.put(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ message: errors.array()[0].msg });
+      console.log("Driver profile validation errors:", errors.array());
+      console.log("Request body:", req.body);
+      return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
     }
 
     const { fullName, phone, avatarUrl, avatarPublicId, vehicleSeats, bankAccountNumber, ifscCode, vehicleNumber, drivingLicense, aadharCard, panCard, rc, vehicleImage } = req.body;

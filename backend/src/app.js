@@ -14,6 +14,7 @@ const profileRoutes = require("./routes/profile");
 const adminRoutes = require("./routes/admin");
 const uploadRoutes = require("./routes/upload");
 const seatsRoutes = require("./routes/seats");
+const paymentRoutes = require("./routes/payments");
 
 const app = express();
 const httpServer = createServer(app);
@@ -61,6 +62,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api", seatsRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
@@ -138,6 +140,18 @@ mongoose
       releaseExpiredLocks(io);
     });
     console.log(`⏰ Seat lock expiry cron job scheduled (every minute)`);
+
+    // Start payout worker for delayed driver payments (only if Redis is available)
+    try {
+      const payoutWorker = require("./workers/payoutWorker");
+      if (payoutWorker) {
+        console.log(`⏳ Payout worker started for delayed driver payments`);
+      } else {
+        console.log(`⚠️ Payout worker not started (Redis not available - delayed payouts disabled)`);
+      }
+    } catch (error) {
+      console.error(`⚠️ Failed to start payout worker:`, error.message);
+    }
   })
   .catch((err) => {
     console.error("❌ MongoDB connection failed:", err.message);

@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Calendar, Loader2, MapPin, Search, Users, Wind } from "lucide-react";
+import { Calendar, Loader2, MapPin, Search, Wind } from "lucide-react";
 import { format, isToday, isTomorrow } from "date-fns";
+import { useTranslation } from "react-i18next";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ const searchParams = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   date: z.string().optional(),
-  seats: z.string().optional(),
 });
 
 export const Route = createFileRoute("/search")({
@@ -33,12 +33,6 @@ export const Route = createFileRoute("/search")({
   component: SearchPage,
 });
 
-const SORT_OPTIONS = [
-  { value: "departureAt",    label: "Earliest departure" },
-  { value: "pricePerSeat",   label: "Lowest price" },
-  { value: "seatsAvailable", label: "Most seats" },
-];
-
 function formatDateLabel(dateStr: string) {
   const d = new Date(dateStr);
   if (isToday(d)) return "Today";
@@ -47,13 +41,19 @@ function formatDateLabel(dateStr: string) {
 }
 
 function SearchPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate({ from: "/search" });
   const params = Route.useSearch();
+
+  const SORT_OPTIONS = [
+    { value: "departureAt",    label: t("search.sort_earliest") },
+    { value: "pricePerSeat",   label: t("search.sort_price") },
+    { value: "seatsAvailable", label: t("search.sort_seats") },
+  ];
 
   const [from, setFrom] = useState(params.from ?? "");
   const [to, setTo] = useState(params.to ?? "");
   const [date, setDate] = useState(params.date ?? "");
-  const [seats, setSeats] = useState(params.seats ?? "1");
   const [rides, setRides] = useState<ApiRide[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -62,7 +62,7 @@ function SearchPage() {
   const sortRef = useRef(sortBy);
   sortRef.current = sortBy;
 
-  const doSearch = async (f: string, t: string, d: string, s: string, sort?: string) => {
+  const doSearch = async (f: string, t: string, d: string, sort?: string) => {
     setLoading(true);
     setSearched(true);
     try {
@@ -70,7 +70,6 @@ function SearchPage() {
       if (f.trim()) qs.set("from", f.trim());
       if (t.trim()) qs.set("to", t.trim());
       if (d) qs.set("date", d);
-      if (s) qs.set("seats", s);
       qs.set("sortBy", sort ?? sortRef.current);
       const data = await api.get<ApiRide[]>(`/api/rides?${qs.toString()}`);
       setRides(Array.isArray(data) ? data : []);
@@ -82,7 +81,7 @@ function SearchPage() {
 
   useEffect(() => {
     if (params.from || params.to || params.date) {
-      doSearch(params.from ?? "", params.to ?? "", params.date ?? "", params.seats ?? "1");
+      doSearch(params.from ?? "", params.to ?? "", params.date ?? "");
     }
 
     // Connect to WebSocket for real-time ride updates
@@ -95,8 +94,7 @@ function SearchPage() {
         const matchesSearch = 
           (!params.from || newRide.origin.toLowerCase().includes(params.from.toLowerCase())) &&
           (!params.to || newRide.destination.toLowerCase().includes(params.to.toLowerCase())) &&
-          (!params.date || new Date(newRide.departureAt).toDateString() === new Date(params.date).toDateString()) &&
-          (!params.seats || newRide.seatsAvailable >= Number(params.seats));
+          (!params.date || new Date(newRide.departureAt).toDateString() === new Date(params.date).toDateString());
 
         if (matchesSearch && !prevRides.find(r => r._id === newRide._id)) {
           return [...prevRides, newRide];
@@ -124,13 +122,13 @@ function SearchPage() {
   }, []);
 
   const handleSearch = () => {
-    navigate({ search: { from: from || undefined, to: to || undefined, date: date || undefined, seats: seats || undefined } });
-    doSearch(from, to, date, seats);
+    navigate({ search: { from: from || undefined, to: to || undefined, date: date || undefined } });
+    doSearch(from, to, date);
   };
 
   const handleSort = (val: string) => {
     setSortBy(val);
-    doSearch(from, to, date, seats, val);
+    doSearch(from, to, date, val);
   };
 
   const routeLabel = (from || to)
@@ -145,11 +143,11 @@ function SearchPage() {
 
         {/* ── Search bar ── */}
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="glass rounded-2xl p-4 mb-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />From</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{t("search.from")}</Label>
               <Input
-                placeholder="City or station"
+                placeholder={t("search.from_ph")}
                 value={from}
                 onChange={e => setFrom(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSearch()}
@@ -157,9 +155,9 @@ function SearchPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />To</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{t("search.to")}</Label>
               <Input
-                placeholder="Destination"
+                placeholder={t("search.to_ph")}
                 value={to}
                 onChange={e => setTo(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSearch()}
@@ -167,20 +165,11 @@ function SearchPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />Date</Label>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />{t("search.date")}</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-background/60 border-border/40" />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />Seats</Label>
-              <Select value={seats} onValueChange={setSeats}>
-                <SelectTrigger className="bg-background/60 border-border/40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{n} seat{n > 1 ? "s" : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
             <Button onClick={handleSearch} className="self-end bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold h-10">
-              <Search className="h-4 w-4 mr-2" />Search
+              <Search className="h-4 w-4 mr-2" />{t("search.button")}
             </Button>
           </div>
         </motion.div>
@@ -191,7 +180,7 @@ function SearchPage() {
 
             {/* LEFT SIDEBAR — sort */}
             <aside className="hidden lg:flex flex-col gap-2 w-52 shrink-0 glass rounded-2xl p-5 sticky top-24">
-              <p className="text-sm font-semibold mb-2">Sort by</p>
+              <p className="text-sm font-semibold mb-2">{t("search.sort")}</p>
               {SORT_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
@@ -223,7 +212,7 @@ function SearchPage() {
                     {routeLabel && <span className="font-semibold">{routeLabel}</span>}
                   </div>
                   <span className="text-sm text-primary font-medium">
-                    {rides.length} ride{rides.length !== 1 ? "s" : ""} available
+                    {rides.length} {t("search.rides_available")}
                   </span>
                 </div>
               )}
@@ -254,8 +243,8 @@ function SearchPage() {
               {!loading && rides.length === 0 && (
                 <div className="text-center py-20 glass rounded-2xl">
                   <Wind className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">No rides found</h3>
-                  <p className="text-muted-foreground text-sm">Try different dates or cities, or publish your own ride.</p>
+                  <h3 className="text-xl font-semibold mb-2">{t("search.no_rides")}</h3>
+                  <p className="text-muted-foreground text-sm">{t("search.no_rides_desc")}</p>
                 </div>
               )}
 
@@ -282,8 +271,8 @@ function SearchPage() {
         ) : (
           <div className="text-center py-24 text-muted-foreground">
             <Search className="h-14 w-14 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-medium mb-1">Where are you going?</p>
-            <p className="text-sm">Enter your route above and hit Search to find rides.</p>
+            <p className="text-lg font-medium mb-1">{t("search.to_ph")}</p>
+            <p className="text-sm">{t("search.no_rides_desc")}</p>
           </div>
         )}
 

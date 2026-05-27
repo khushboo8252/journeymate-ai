@@ -4,6 +4,7 @@ const Booking = require("../models/Booking");
 const Ride = require("../models/Ride");
 const Seat = require("../models/Seat");
 const { protect, restrictTo } = require("../middleware/auth");
+const { createUpfrontPaymentOrder, processUpfrontPayment } = require("../services/paymentService");
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.get("/my", protect, async (req, res) => {
   }
 });
 
-// POST /api/bookings — book seats using seat numbers
+// POST /api/bookings — book seats using seat numbers (creates pending booking)
 router.post(
   "/",
   protect,
@@ -95,19 +96,72 @@ router.post(
         });
       }
 
-      // Create booking
+      // Create pending booking
       const booking = await Booking.create({
         rideId,
         passengerId: userId,
         seats: seatNumbers.length,
-        seatNumbers: seatNumbers
+        seatNumbers: seatNumbers,
+        status: "pending_payment"
       });
 
+      // Create upfront payment order (25% of total fare for booked seats)
+      const paymentOrder = await createUpfrontPaymentOrder(rideId, userId, seatNumbers.length);
+
+      res.status(201).json({
+        booking,
+        paymentOrder,
+        requiresPayment: true,
+        upfrontAmount: paymentOrder.amount,
+      });
+    } catch (err) {
+      console.error("Booking error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+// POST /api/bookings/confirm — Confirm booking after payment
+router.post(
+  "/confirm",
+  protect,
+  [
+    body("bookingId").notEmpty().withMessage("Booking ID is required"),
+    body("paymentId").notEmpty().withMessage("Payment ID is required"),
+    body("signature").notEmpty().withMessage("Signature is required"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: errors.array()[0].msg });
+    }
+
+    const { bookingId, paymentId, signature } = req.body;
+    const userId = req.user._id;
+
+    try {
+      const booking = await Booking.findById(bookingId);
+      if (!booking) return res.status(404).json({ message: "Booking not found." });
+      if (String(booking.passengerId) !== String(userId)) {
+        return res.status(403).json({ message: "You can only confirm your own bookings." });
+      }
+      if (booking.status !== "pending_payment") {
+        return res.status(400).json({ message: "Booking is not in pending payment state." });
+      }
+
+      // Process upfront payment
+      await processUpfrontPayment(booking.rideId, paymentId, signature, userId);
+
       // Convert locked seats to booked
-      await Seat.bookSeats(rideId, seatNumbers, userId, booking._id);
+      await Seat.bookSeats(booking.rideId, booking.seatNumbers, userId, booking._id);
+
+      // Update booking status
+      booking.status = "confirmed";
+      await booking.save();
 
       // Update ride seatsAvailable
-      const seatCounts = await Seat.getSeatCounts(rideId);
+      const ride = await Ride.findById(booking.rideId);
+      const seatCounts = await Seat.getSeatCounts(booking.rideId);
       ride.seatsAvailable = seatCounts.available;
       await ride.save();
 
@@ -119,17 +173,17 @@ router.post(
 
       global.io.to(`driver_${ride.driverId}`).emit("new_booking", bookingWithDetails);
       global.io.to(`user_${userId}`).emit("booking_created", bookingWithDetails);
-      global.io.to(`ride_${rideId}`).emit("seat_booked", {
-        rideId,
-        seatNumbers,
+      global.io.to(`ride_${booking.rideId}`).emit("seat_booked", {
+        rideId: booking.rideId,
+        seatNumbers: booking.seatNumbers,
         bookedBy: userId,
         passengerName: req.user.fullName
       });
       global.io.emit("ride_updated", ride);
 
-      res.status(201).json(booking);
+      res.json({ success: true, booking: bookingWithDetails });
     } catch (err) {
-      console.error("Booking error:", err);
+      console.error("Confirm booking error:", err);
       res.status(500).json({ message: err.message });
     }
   }

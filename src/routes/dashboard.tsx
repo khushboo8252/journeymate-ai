@@ -2,11 +2,13 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
 import { getSocket, joinUserRoom, joinDriverRoom } from "@/lib/socket";
 import {
   ArrowRight,
   Calendar,
   Car,
+  Check,
   CheckCircle,
   ExternalLink,
   IndianRupee,
@@ -61,6 +63,7 @@ type DriverBooking = ApiBooking & {
 };
 
 function DashboardPage() {
+  const { t } = useTranslation();
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const [myRides, setMyRides] = useState<ApiRide[]>([]);
@@ -121,7 +124,7 @@ function DashboardPage() {
     socket.on("driver_approved", (driver) => {
       if (driver._id === user._id) {
         setShowApprovalPopup(true);
-        toast.success("Your driver profile has been approved!");
+        toast.success(t("dashboard.approval_popup"));
       }
     });
 
@@ -246,6 +249,81 @@ function DashboardPage() {
     }
   };
 
+  const completeRide = async (rideId: string) => {
+    try {
+      // Create order for remaining 75% payment
+      const orderResponse = await api.post<{ keyId: string; amount: number; currency: string; orderId: string }>(`/api/rides/${rideId}/complete-order`, {});
+      
+      // Check if payment system is configured
+      if (!orderResponse.keyId || orderResponse.keyId === "your_razorpay_key_id") {
+        toast.error("Payment system not configured. Please contact admin.");
+        return;
+      }
+      
+      // Load Razorpay script dynamically
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => {
+        const options = {
+          key: orderResponse.keyId,
+          amount: orderResponse.amount * 100,
+          currency: orderResponse.currency,
+          name: "RideWave",
+          description: "Complete ride payment (75% remaining)",
+          order_id: orderResponse.orderId,
+          handler: async function (response: any) {
+            try {
+              // Verify payment and complete ride
+              const completeResponse = await api.post<{ success: boolean; ride: any; driverEarning?: number }>(`/api/rides/${rideId}/complete`, {
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+              });
+              if (completeResponse.driverEarning !== undefined) {
+                toast.success(`Ride completed! Driver earning: ₹${completeResponse.driverEarning}`);
+              } else {
+                toast.success("Ride completed successfully!");
+              }
+              fetchData();
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Failed to complete ride");
+            }
+          },
+          prefill: {
+            name: user?.fullName,
+            email: user?.email,
+          },
+          theme: {
+            color: "#6366f1",
+          },
+          modal: {
+            ondismiss: function() {
+              toast.error("Payment cancelled");
+            },
+          },
+        };
+        try {
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        } catch (error) {
+          toast.error("Failed to initialize payment. Please try again.");
+        }
+      };
+      script.onerror = () => {
+        toast.error("Failed to load payment gateway. Please check your internet connection.");
+      };
+      document.body.appendChild(script);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to complete ride";
+      // If the error is about payment status, provide a more helpful message
+      if (errorMessage.includes("Upfront payment")) {
+        toast.error("Cannot complete ride: Upfront payment not completed by passenger.");
+      } else {
+        toast.error(errorMessage);
+      }
+    }
+  };
+
   const handlePopupClick = async () => {
     // Mark notification as seen
     await api.post("/api/profile/notification-seen", {});
@@ -268,11 +346,11 @@ function DashboardPage() {
         <main className="flex-1 flex items-center justify-center px-4 py-24">
           <div className="glass rounded-2xl p-10 text-center max-w-sm w-full">
             <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Sign in required</h2>
+            <h2 className="text-2xl font-bold mb-2">{t("auth.signin")}</h2>
             <p className="text-muted-foreground mb-6">Please sign in to view your dashboard.</p>
             <Link to="/auth">
               <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
-                Sign in
+                {t("auth.signin")}
               </Button>
             </Link>
           </div>
@@ -308,19 +386,19 @@ function DashboardPage() {
                     : "bg-muted text-muted-foreground border border-border/40"
                 }`}>
                   {isDriver ? <Car className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                  {isDriver ? "Driver" : "Passenger"}
+                  {isDriver ? t("auth.driver") : t("auth.passenger")}
                 </span>
                 {isDriver && (user as any).isApproved && (
                   <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-green-500/20 text-green-600 border border-green-500/30">
                     <CheckCircle className="h-3 w-3" />
-                    Verified
+                    {t("dashboard.verified")}
                   </span>
                 )}
               </div>
               <p className="text-muted-foreground text-sm mt-0.5">{user.email ?? ""}</p>
             </div>
             <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />Sign out
+              <LogOut className="h-4 w-4" />{t("nav.login")}
             </Button>
           </div>
 
@@ -354,7 +432,7 @@ function DashboardPage() {
                 onClick={handlePopupClick}
                 className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white"
               >
-                Go to Publish Ride
+                {t("dashboard.publish_now")}
               </Button>
             </motion.div>
           )}
@@ -362,12 +440,12 @@ function DashboardPage() {
           <Tabs defaultValue={isDriver ? "rides" : "bookings"}>
             <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">
               {isDriver && (
-                <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />My rides ({myRides.length})</TabsTrigger>
+                <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />{t("dashboard.my_rides")} ({myRides.length})</TabsTrigger>
               )}
               {isDriver && (
                 <TabsTrigger value="passengers" className="flex items-center gap-1.5"><Users className="h-4 w-4" />Passengers ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
               )}
-              <TabsTrigger value="bookings" className="flex items-center gap-1.5"><Ticket className="h-4 w-4" />My bookings ({myBookings.length})</TabsTrigger>
+              <TabsTrigger value="bookings" className="flex items-center gap-1.5"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
               <TabsTrigger value="profile" className="flex items-center gap-1.5"><User className="h-4 w-4" />Profile</TabsTrigger>
             </TabsList>
 
@@ -377,16 +455,16 @@ function DashboardPage() {
                 <p className="text-sm text-muted-foreground">Rides you're driving</p>
                 <Link to="/publish">
                   <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
-                    <Car className="h-4 w-4 mr-1" />Publish new
+                    <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
                   </Button>
                 </Link>
               </div>
               {myRides.length === 0 && (
                 <div className="text-center py-16 glass rounded-2xl">
                   <Car className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-muted-foreground">You haven't published any rides yet.</p>
+                  <p className="text-muted-foreground">{t("dashboard.no_rides_desc")}</p>
                   <Link to="/publish" className="mt-4 inline-block">
-                    <Button size="sm" variant="outline">Publish a ride</Button>
+                    <Button size="sm" variant="outline">{t("dashboard.publish_ride")}</Button>
                   </Link>
                 </div>
               )}
@@ -411,6 +489,9 @@ function DashboardPage() {
                       <>
                         <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
                           <Users className="h-4 w-4 mr-1" />Seat Map
+                        </Button>
+                        <Button size="sm" variant="default" onClick={() => completeRide(ride._id)} className="bg-green-600 hover:bg-green-700">
+                          <Check className="h-4 w-4 mr-1" />Complete
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => cancelRide(ride._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="h-4 w-4" />
@@ -496,7 +577,7 @@ function DashboardPage() {
                 <p className="text-sm text-muted-foreground">Rides you've booked as passenger</p>
                 <Link to="/search">
                   <Button size="sm" variant="outline" className="flex items-center gap-1.5">
-                    <Search className="h-4 w-4" />Find a ride
+                    <Search className="h-4 w-4" />{t("search.button")}
                   </Button>
                 </Link>
               </div>
@@ -505,7 +586,7 @@ function DashboardPage() {
                   <Ticket className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">No bookings yet.</p>
                   <Link to="/search" className="mt-4 inline-block">
-                    <Button size="sm" variant="outline">Find a ride</Button>
+                    <Button size="sm" variant="outline">{t("search.button")}</Button>
                   </Link>
                 </div>
               )}

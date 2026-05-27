@@ -6,6 +6,7 @@ import { z } from "zod";
 import { motion } from "framer-motion";
 import { Camera, Car, CheckCircle2, CreditCard, Loader2, Lock, Phone, User } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -29,23 +30,25 @@ export const Route = createFileRoute("/driver-setup")({
 });
 
 const schema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
-  phone: z.string().min(10, "Enter a valid phone number"),
-  vehicleType: z.string().min(1, "Select vehicle type"),
-  vehicleNumber: z.string().min(1, "Vehicle number is required"),
+  fullName: z.string().min(2),
+  phone: z.string().min(10),
+  vehicleType: z.string().min(1),
+  vehicleNumber: z.string().min(1),
+  vehicleSeats: z.string().min(1),
   bankAccountNumber: z
     .string()
-    .min(9, "Account number must be at least 9 digits")
-    .max(18, "Account number too long")
-    .regex(/^\d+$/, "Account number must contain only digits"),
+    .min(9)
+    .max(18)
+    .regex(/^\d+$/),
   ifscCode: z
     .string()
-    .regex(/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/, "Invalid IFSC code (e.g. SBIN0001234)"),
+    .regex(/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 function DriverSetupPage() {
+  const { t } = useTranslation();
   const { user, loading, setUser } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -198,6 +201,7 @@ function DriverSetupPage() {
         phone: values.phone,
         vehicleType: values.vehicleType,
         vehicleNumber: values.vehicleNumber,
+        vehicleSeats: values.vehicleSeats,
         bankAccountNumber: values.bankAccountNumber,
         ifscCode: values.ifscCode.toUpperCase(),
       };
@@ -213,14 +217,14 @@ function DriverSetupPage() {
       setUser(data.user);
 
       if (data.requiresApproval) {
-        toast.success("Profile submitted for admin approval. You'll be notified once approved.");
+        toast.success(t("driver_setup.success"));
         navigate({ to: "/dashboard" });
       } else {
-        toast.success("Driver profile saved! You can now publish rides.");
+        toast.success(t("driver_setup.success_no_approval"));
         navigate({ to: "/dashboard" });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save profile");
+      toast.error(err instanceof Error ? err.message : t("driver_setup.error"));
     }
   };
 
@@ -233,11 +237,11 @@ function DriverSetupPage() {
         <main className="flex-1 flex items-center justify-center px-4 py-24">
           <div className="glass rounded-2xl p-10 text-center max-w-sm w-full">
             <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Sign in required</h2>
-            <p className="text-muted-foreground mb-6">Please sign in as a driver to complete setup.</p>
+            <h2 className="text-2xl font-bold mb-2">{t("driver_setup.sign_in_required")}</h2>
+            <p className="text-muted-foreground mb-6">{t("driver_setup.sign_in_desc")}</p>
             <Link to="/auth">
               <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
-                Sign in
+                {t("driver_setup.sign_in")}
               </Button>
             </Link>
           </div>
@@ -268,12 +272,12 @@ function DriverSetupPage() {
             <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3">
               <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-green-600 dark:text-green-400">Profile complete</p>
-                <p className="text-xs text-muted-foreground">You can update your details below or go to your dashboard.</p>
+                <p className="text-sm font-medium text-green-600 dark:text-green-400">{t("dashboard.profile_complete")}</p>
+                <p className="text-xs text-muted-foreground">{t("dashboard.profile_complete_desc")}</p>
               </div>
               <Link to="/dashboard">
                 <Button size="sm" variant="outline" className="shrink-0 border-green-500/40 text-green-600 hover:bg-green-500/10">
-                  Dashboard
+                  {t("dashboard.go_to_dashboard")}
                 </Button>
               </Link>
             </div>
@@ -285,8 +289,8 @@ function DriverSetupPage() {
               <Car className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Complete your driver profile</h1>
-              <p className="text-sm text-muted-foreground">Required before you can publish rides</p>
+              <h1 className="text-2xl font-bold">{t("driver_setup.title")}</h1>
+              <p className="text-sm text-muted-foreground">{t("driver_setup.subtitle")}</p>
             </div>
           </div>
 
@@ -296,7 +300,7 @@ function DriverSetupPage() {
             <div className="glass rounded-2xl p-6 space-y-5">
               <h2 className="font-semibold text-base flex items-center gap-2">
                 <User className="h-4 w-4 text-primary" />
-                Personal details
+                {t("driver_setup.personal")}
               </h2>
               <Separator />
 
@@ -339,16 +343,16 @@ function DriverSetupPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Full name</Label>
+                  <Label>{t("driver_setup.full_name")}</Label>
                   <Input placeholder="Rahul Sharma" {...register("fullName")} />
-                  {errors.fullName && <p className="text-xs text-destructive">{errors.fullName.message}</p>}
+                  {errors.fullName && <p className="text-xs text-destructive">{t("auth.name_min")}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
-                    <Phone className="h-3.5 w-3.5" />Phone number
+                    <Phone className="h-3.5 w-3.5" />{t("driver_setup.phone")}
                   </Label>
                   <Input placeholder="+91 98765 43210" type="tel" {...register("phone")} />
-                  {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+                  {errors.phone && <p className="text-xs text-destructive">{t("auth.valid_mobile")}</p>}
                 </div>
               </div>
             </div>
@@ -357,12 +361,12 @@ function DriverSetupPage() {
             <div className="glass rounded-2xl p-6 space-y-5">
               <h2 className="font-semibold text-base flex items-center gap-2">
                 <Car className="h-4 w-4 text-primary" />
-                Vehicle details
+                {t("driver_setup.vehicle")}
               </h2>
               <Separator />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Vehicle type</Label>
+                  <Label>{t("driver_setup.vehicle_type")}</Label>
                   <Select
                     defaultValue="sedan"
                     onValueChange={v => setValue("vehicleType", v)}
@@ -378,22 +382,39 @@ function DriverSetupPage() {
                       <SelectItem value="van">Van (10 seats)</SelectItem>
                     </SelectContent>
                   </Select>
-                  {errors.vehicleType && <p className="text-xs text-destructive">{errors.vehicleType.message}</p>}
+                  {errors.vehicleType && <p className="text-xs text-destructive">{t("driver_setup.vehicle_type")}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Vehicle number</Label>
-                  <Input placeholder="MH 01 AB 1234" {...register("vehicleNumber")} />
-                  {errors.vehicleNumber && <p className="text-xs text-destructive">{errors.vehicleNumber.message}</p>}
+                  <Label>{t("driver_setup.vehicle_seats")}</Label>
+                  <Select
+                    defaultValue="5"
+                    onValueChange={v => setValue("vehicleSeats", v)}
+                  >
+                    <SelectTrigger className="bg-background/60 border-border/40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                        <SelectItem key={n} value={String(n)}>{n} seat{n > 1 ? 's' : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.vehicleSeats && <p className="text-xs text-destructive">{t("driver_setup.vehicle_seats")}</p>}
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Vehicle image</Label>
+                <Label>{t("driver_setup.vehicle_number")}</Label>
+                <Input placeholder="MH 01 AB 1234" {...register("vehicleNumber")} />
+                {errors.vehicleNumber && <p className="text-xs text-destructive">{t("driver_setup.vehicle_number")}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("driver_setup.vehicle_image")}</Label>
                 <Input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setVehicleImage(e.target.files?.[0] || null)}
                 />
-                {uploadingDoc === "vehicleImage-front" && <p className="text-xs text-muted-foreground">Uploading...</p>}
+                {uploadingDoc === "vehicleImage-front" && <p className="text-xs text-muted-foreground">{t("driver_setup.uploading")}</p>}
               </div>
             </div>
 
@@ -401,13 +422,13 @@ function DriverSetupPage() {
             <div className="glass rounded-2xl p-6 space-y-5">
               <h2 className="font-semibold text-base flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-primary" />
-                Bank details
+                {t("driver_setup.banking")}
                 <span className="ml-auto text-xs font-normal text-muted-foreground">Encrypted &amp; secure</span>
               </h2>
               <Separator />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label>Bank account number</Label>
+                  <Label>{t("driver_setup.bank_account")}</Label>
                   <Input
                     placeholder="Enter your account number"
                     type="text"
@@ -415,11 +436,11 @@ function DriverSetupPage() {
                     {...register("bankAccountNumber")}
                   />
                   {errors.bankAccountNumber && (
-                    <p className="text-xs text-destructive">{errors.bankAccountNumber.message}</p>
+                    <p className="text-xs text-destructive">{t("driver_setup.bank_account")}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>IFSC code</Label>
+                  <Label>{t("driver_setup.ifsc")}</Label>
                   <Input
                     placeholder="SBIN0001234"
                     className="uppercase"
@@ -429,7 +450,7 @@ function DriverSetupPage() {
                       register("ifscCode").onChange(e);
                     }}
                   />
-                  {errors.ifscCode && <p className="text-xs text-destructive">{errors.ifscCode.message}</p>}
+                  {errors.ifscCode && <p className="text-xs text-destructive">{t("driver_setup.ifsc")}</p>}
                   <p className="text-xs text-muted-foreground">11-character code on your cheque book</p>
                 </div>
               </div>
@@ -439,14 +460,14 @@ function DriverSetupPage() {
             <div className="glass rounded-2xl p-6 space-y-5">
               <h2 className="font-semibold text-base flex items-center gap-2">
                 <Lock className="h-4 w-4 text-primary" />
-                Verification documents
+                {t("driver_setup.documents")}
                 <span className="ml-auto text-xs font-normal text-muted-foreground">Required for approval</span>
               </h2>
               <Separator />
               
               {/* Driving License */}
               <div className="space-y-3">
-                <Label className="font-medium">Driving License</Label>
+                <Label className="font-medium">{t("driver_setup.driving_license")}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Front side</Label>
@@ -456,7 +477,7 @@ function DriverSetupPage() {
                       onChange={(e) => setDrivingLicenseFront(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
-                    {uploadingDoc === "drivingLicense-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                    {uploadingDoc === "drivingLicense-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Back side</Label>
@@ -466,14 +487,14 @@ function DriverSetupPage() {
                       onChange={(e) => setDrivingLicenseBack(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
-                    {uploadingDoc === "drivingLicense-back" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                    {uploadingDoc === "drivingLicense-back" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                   </div>
                 </div>
               </div>
 
               {/* Aadhar Card */}
               <div className="space-y-3">
-                <Label className="font-medium">Aadhar Card</Label>
+                <Label className="font-medium">{t("driver_setup.aadhar")}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Front side</Label>
@@ -483,7 +504,7 @@ function DriverSetupPage() {
                       onChange={(e) => setAadharCardFront(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
-                    {uploadingDoc === "aadharCard-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                    {uploadingDoc === "aadharCard-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Back side</Label>
@@ -493,14 +514,14 @@ function DriverSetupPage() {
                       onChange={(e) => setAadharCardBack(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
-                    {uploadingDoc === "aadharCard-back" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                    {uploadingDoc === "aadharCard-back" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                   </div>
                 </div>
               </div>
 
               {/* PAN Card */}
               <div className="space-y-3">
-                <Label className="font-medium">PAN Card</Label>
+                <Label className="font-medium">{t("driver_setup.pan")}</Label>
                 <div>
                   <Label className="text-xs text-muted-foreground">Front side</Label>
                   <Input
@@ -509,13 +530,13 @@ function DriverSetupPage() {
                     onChange={(e) => setPanCardFront(e.target.files?.[0] || null)}
                     className="mt-1"
                   />
-                  {uploadingDoc === "panCard-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                  {uploadingDoc === "panCard-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                 </div>
               </div>
 
               {/* RC */}
               <div className="space-y-3">
-                <Label className="font-medium">Vehicle RC</Label>
+                <Label className="font-medium">{t("driver_setup.rc")}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Front side</Label>
@@ -525,7 +546,7 @@ function DriverSetupPage() {
                       onChange={(e) => setRcFront(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
-                    {uploadingDoc === "rc-front" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                    {uploadingDoc === "rc-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Back side</Label>
@@ -535,7 +556,7 @@ function DriverSetupPage() {
                       onChange={(e) => setRcBack(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
-                    {uploadingDoc === "rc-back" && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                    {uploadingDoc === "rc-back" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                   </div>
                 </div>
               </div>
@@ -546,7 +567,7 @@ function DriverSetupPage() {
               disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold h-12 text-base"
             >
-              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Request Admin Approval"}
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : t("driver_setup.save")}
             </Button>
           </form>
         </motion.div>

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format, differenceInMinutes } from "date-fns";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   Car,
@@ -40,6 +41,7 @@ type RideWithDriver = ApiRide & {
 };
 
 function RideDetailPage() {
+  const { t } = useTranslation();
   const { rideId } = Route.useParams();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -129,21 +131,107 @@ function RideDetailPage() {
   const bookRide = async () => {
     if (!user) { navigate({ to: "/auth" }); return; }
     if (!ride) return;
-    if (selectedSeats.length === 0) { toast.error("Please select at least one seat."); return; }
+    if (selectedSeats.length === 0) { toast.error(t("ride_details.select_seat_error")); return; }
     setBooking(true);
     try {
       // First lock the seats (IRCTC style - lock only on book button click)
       await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
       
-      // Then proceed with booking
-      await api.post("/api/bookings", { rideId: ride._id, seatNumbers: selectedSeats });
-      toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
-      setAlreadyBooked(true);
-      setSelectedSeats([]);
-      fetchRide();
-      fetchSeats();
+      // Create booking (will return payment order)
+      const bookingResponse = await api.post<{
+        booking: { _id: string };
+        paymentOrder?: { keyId: string; amount: number; currency: string; orderId: string };
+        requiresPayment: boolean;
+        upfrontAmount?: number;
+      }>("/api/bookings", { rideId: ride._id, seatNumbers: selectedSeats });
+      
+      if (bookingResponse.requiresPayment && bookingResponse.paymentOrder) {
+        const paymentOrder = bookingResponse.paymentOrder;
+        
+        // Check if payment system is configured
+        if (!paymentOrder.keyId || paymentOrder.keyId === "your_razorpay_key_id") {
+          toast.error("Payment system not configured. Please contact admin.");
+          // Release the locked seats
+          await api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats });
+          fetchSeats();
+          setBooking(false);
+          return;
+        }
+        
+        // Load Razorpay script dynamically
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.async = true;
+        script.onload = () => {
+          const options = {
+            key: paymentOrder.keyId,
+            amount: paymentOrder.amount * 100,
+            currency: paymentOrder.currency,
+            name: "RideWave",
+            description: `Booking for ${selectedSeats.length} seat(s)`,
+            order_id: paymentOrder.orderId,
+            handler: async function (response: any) {
+              try {
+                // Verify payment and confirm booking
+                await api.post("/api/bookings/confirm", {
+                  bookingId: bookingResponse.booking._id,
+                  paymentId: response.razorpay_payment_id,
+                  signature: response.razorpay_signature,
+                });
+                toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
+                setAlreadyBooked(true);
+                setSelectedSeats([]);
+                fetchRide();
+                fetchSeats();
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
+                // Release the locked seats on error
+                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+                fetchSeats();
+              }
+            },
+            prefill: {
+              name: user.fullName,
+              email: user.email,
+            },
+            theme: {
+              color: "#6366f1",
+            },
+            modal: {
+              ondismiss: function() {
+                toast.error("Payment cancelled");
+                // Release the locked seats
+                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+                fetchSeats();
+              },
+            },
+          };
+          try {
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+          } catch (error) {
+            toast.error("Failed to initialize payment. Please try again.");
+            // Release the locked seats
+            api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+            fetchSeats();
+          }
+        };
+        script.onerror = () => {
+          toast.error("Failed to load payment gateway. Please check your internet connection.");
+          // Release the locked seats
+          api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+          fetchSeats();
+        };
+        document.body.appendChild(script);
+      } else {
+        toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
+        setAlreadyBooked(true);
+        setSelectedSeats([]);
+        fetchRide();
+        fetchSeats();
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Booking failed");
+      toast.error(err instanceof Error ? err.message : t("ride_details.booking_failed"));
       // Refresh seats to show current status
       fetchSeats();
     }
@@ -168,9 +256,9 @@ function RideDetailPage() {
         <main className="flex-1 flex items-center justify-center px-4 py-24 text-center">
           <div>
             <Car className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Ride not found</h2>
-            <p className="text-muted-foreground mb-6">This ride may have been removed or cancelled.</p>
-            <Link to="/search"><Button variant="outline">Browse rides</Button></Link>
+            <h2 className="text-2xl font-bold mb-2">{t("ride_details.not_found")}</h2>
+            <p className="text-muted-foreground mb-6">{t("ride_details.not_found_desc")}</p>
+            <Link to="/search"><Button variant="outline">{t("ride_details.browse")}</Button></Link>
           </div>
         </main>
         <Footer />
@@ -198,10 +286,10 @@ function RideDetailPage() {
       <Header />
       <main className="flex-1 container mx-auto px-4 md:px-6 py-10 max-w-5xl">
         <Link to="/search" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
-          <ArrowLeft className="h-4 w-4" />Back to search
+          <ArrowLeft className="h-4 w-4" />{t("ride_details.back")}
         </Link>
 
-        <h1 className="text-2xl font-bold mb-6">Ride details</h1>
+        <h1 className="text-2xl font-bold mb-6">{t("ride_details.title")}</h1>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -213,9 +301,9 @@ function RideDetailPage() {
               {canBook && ride.seatsTotal > 0 && (
                 <div className="glass rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-base">Select your seat{selectedSeats.length > 1 ? "s" : ""}</h3>
+                    <h3 className="font-semibold text-base">{t("ride_details.select_seat")}</h3>
                     <span className="text-xs text-muted-foreground">
-                      {seats.filter(s => s.status === 'available').length} of {ride.seatsTotal} available
+                      {seats.filter(s => s.status === 'available').length} of {ride.seatsTotal} {t("ride_details.available")}
                     </span>
                   </div>
                   <SeatPicker
@@ -252,7 +340,7 @@ function RideDetailPage() {
                     {durationMins !== null && (
                       <div className="flex items-center gap-3 py-0.5">
                         <span className="text-xs text-muted-foreground w-12 shrink-0">{formatDur(durationMins)}</span>
-                        <span className="text-xs text-muted-foreground">Travel duration</span>
+                        <span className="text-xs text-muted-foreground">{t("ride_details.duration")}</span>
                       </div>
                     )}
 
@@ -271,7 +359,7 @@ function RideDetailPage() {
                 {/* Seats + status row */}
                 <div className="flex items-center gap-4 mt-5 pt-4 border-t border-border/30">
                   <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Users className="h-4 w-4" />{ride.seatsAvailable} seat{ride.seatsAvailable !== 1 ? "s" : ""} available
+                    <Users className="h-4 w-4" />{ride.seatsAvailable} {t("ride_details.seats_available")}
                   </span>
                   <Badge
                     variant={ride.status === "active" ? "default" : "secondary"}
@@ -294,7 +382,7 @@ function RideDetailPage() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base leading-tight">{driver?.fullName ?? "Driver"}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Verified driver</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("ride_details.verified_driver")}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </div>
@@ -306,14 +394,14 @@ function RideDetailPage() {
                   {/* Instant booking */}
                   <div className="flex items-center gap-3 text-sm">
                     <Zap className="h-4 w-4 text-primary shrink-0" />
-                    <span>Your booking will be confirmed instantly</span>
+                    <span>{t("ride_details.instant_booking")}</span>
                   </div>
 
                   {/* Seats in vehicle */}
                   {driver?.vehicleSeats && (
                     <div className="flex items-center gap-3 text-sm">
                       <Car className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span>{driver.vehicleSeats}-seater vehicle</span>
+                      <span>{driver.vehicleSeats}-{t("ride_details.seater")}</span>
                     </div>
                   )}
 
@@ -338,7 +426,7 @@ function RideDetailPage() {
                 {!isDriver && (
                   <div className="px-5 pb-5">
                     <Button variant="outline" className="flex items-center gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/5">
-                      <MessageSquare className="h-4 w-4" />Contact {driver?.fullName?.split(" ")[0] ?? "Driver"}
+                      <MessageSquare className="h-4 w-4" />{t("ride_details.contact")} {driver?.fullName?.split(" ")[0] ?? "Driver"}
                     </Button>
                   </div>
                 )}
@@ -400,17 +488,17 @@ function RideDetailPage() {
                   {!user && (
                     <div className="text-center space-y-3">
                       <Lock className="h-7 w-7 text-muted-foreground/40 mx-auto" />
-                      <p className="text-sm text-muted-foreground">Sign in to book this ride</p>
+                      <p className="text-sm text-muted-foreground">{t("ride_details.sign_in_to_book")}</p>
                       <Link to="/auth">
                         <Button className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full font-semibold">
-                          Sign in
+                          {t("auth.signin")}
                         </Button>
                       </Link>
                     </div>
                   )}
 
                   {isDriver && (
-                    <p className="text-sm text-muted-foreground text-center py-2">This is your ride.</p>
+                    <p className="text-sm text-muted-foreground text-center py-2">{t("ride_details.your_ride")}</p>
                   )}
 
                   {canBook && (
@@ -419,11 +507,11 @@ function RideDetailPage() {
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-muted-foreground">
                           {selectedSeats.length === 0 ? (
-                            <span className="text-amber-400 text-xs">Select seats on the left →</span>
+                            <span className="text-amber-400 text-xs">{t("ride_details.select_seats_hint")}</span>
                           ) : (
                             <span>
                               <span className="font-semibold text-foreground">{selectedSeats.length}</span>
-                              {" "}passenger{selectedSeats.length > 1 ? "s" : ""}
+                              {" "}{t("ride_details.passenger")}
                             </span>
                           )}
                         </div>
@@ -445,14 +533,14 @@ function RideDetailPage() {
                         {booking
                           ? <Loader2 className="h-5 w-5 animate-spin" />
                           : selectedSeats.length === 0
-                          ? "Select seats to book"
-                          : <><Zap className="h-4 w-4 mr-1.5" />Book {selectedSeats.length} seat{selectedSeats.length > 1 ? "s" : ""}</>}
+                          ? t("ride_details.select_seats_to_book")
+                          : <><Zap className="h-4 w-4 mr-1.5" />{t("ride_details.book")} {selectedSeats.length} {t("ride_details.seat")}</>}
                       </Button>
                     </>
                   )}
 
                   {!canBook && ride.seatsAvailable === 0 && !isDriver && !alreadyBooked && user && (
-                    <p className="text-center text-sm text-muted-foreground py-2">This ride is fully booked.</p>
+                    <p className="text-center text-sm text-muted-foreground py-2">{t("ride_details.fully_booked")}</p>
                   )}
                 </div>
               </div>

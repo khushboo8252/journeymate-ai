@@ -67,21 +67,28 @@ router.post('/rides/:rideId/seats/lock', protect, async (req, res) => {
     const userId = req.user._id;
     const io = global.io;
 
+    console.log(`Seat lock request - Ride: ${rideId}, User: ${userId}, Seats: ${JSON.stringify(seatNumbers)}`);
+
     if (!seatNumbers || !Array.isArray(seatNumbers) || seatNumbers.length === 0) {
+      console.log('Seat lock failed: Seat numbers are required');
       return res.status(400).json({ error: 'Seat numbers are required' });
     }
 
     // Verify ride exists and is active
     const ride = await Ride.findById(rideId);
     if (!ride) {
+      console.log(`Seat lock failed: Ride not found - ${rideId}`);
       return res.status(404).json({ error: 'Ride not found' });
     }
+    console.log(`Ride status: ${ride.status}, Driver: ${ride.driverId}`);
     if (ride.status !== 'active') {
+      console.log(`Seat lock failed: Ride is not active - status is ${ride.status}`);
       return res.status(400).json({ error: 'Ride is not active' });
     }
 
     // Check if user is the driver
     if (ride.driverId.toString() === userId.toString()) {
+      console.log(`Seat lock failed: Driver cannot book their own ride`);
       return res.status(400).json({ error: 'Driver cannot book their own ride' });
     }
 

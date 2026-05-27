@@ -6,6 +6,7 @@ import { z } from "zod";
 import { motion } from "framer-motion";
 import { Car, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -28,15 +29,15 @@ export const Route = createFileRoute("/auth")({
 });
 
 const signInSchema = z.object({
-  email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.string().email(),
+  password: z.string().min(6),
 });
 
 const signUpSchema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Enter a valid email"),
-  phone: z.string().min(10, "Enter a valid mobile number"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  fullName: z.string().min(2),
+  email: z.string().email(),
+  phone: z.string().min(10),
+  password: z.string().min(6),
   role: z.enum(["driver", "passenger"]),
 });
 
@@ -44,6 +45,7 @@ type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
 
 function SignInForm() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const [showPw, setShowPw] = useState(false);
@@ -56,42 +58,43 @@ function SignInForm() {
       const data = await api.post<{ token: string; user: ApiUser }>("/api/auth/login", values);
       setToken(data.token);
       setUser(data.user);
-      toast.success("Welcome back!");
+      toast.success(t("auth.welcome_back"));
       if (data.user.role === "driver") {
         navigate({ to: "/driver-setup" });
       } else {
         navigate({ to: "/dashboard" });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Sign in failed");
+      toast.error(err instanceof Error ? err.message : t("auth.signin_failed"));
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="si-email">Email</Label>
-        <Input id="si-email" type="email" placeholder="you@example.com" {...register("email")} />
-        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+        <Label htmlFor="si-email">{t("auth.email")}</Label>
+        <Input id="si-email" type="email" placeholder={t("auth.email_ph")} {...register("email")} />
+        {errors.email && <p className="text-xs text-destructive">{t("auth.valid_email")}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="si-pw">Password</Label>
+        <Label htmlFor="si-pw">{t("auth.password")}</Label>
         <div className="relative">
-          <Input id="si-pw" type={showPw ? "text" : "password"} placeholder="••••••••" {...register("password")} className="pr-10" />
+          <Input id="si-pw" type={showPw ? "text" : "password"} placeholder={t("auth.password_ph")} {...register("password")} className="pr-10" />
           <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
-        {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+        {errors.password && <p className="text-xs text-destructive">{t("auth.password_min")}</p>}
       </div>
       <Button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold">
-        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("auth.signin")}
       </Button>
     </form>
   );
 }
 
 function SignUpForm() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const [showPw, setShowPw] = useState(false);
@@ -112,14 +115,14 @@ function SignUpForm() {
       });
       setToken(data.token);
       setUser(data.user);
-      toast.success("Account created! Welcome to RideWave.");
+      toast.success(t("auth.account_created"));
       if (data.user.role === "driver") {
         navigate({ to: "/driver-setup" });
       } else {
         navigate({ to: "/dashboard" });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Registration failed");
+      toast.error(err instanceof Error ? err.message : t("auth.signup_failed"));
     }
   };
 
@@ -127,51 +130,52 @@ function SignUpForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {/* Role selector */}
       <div className="space-y-1.5">
-        <Label>I am a</Label>
+        <Label>{t("auth.i_am")}</Label>
         <Select value={selectedRole} onValueChange={v => setValue("role", v as "driver" | "passenger")}>
           <SelectTrigger className="bg-background/60 border-border/40">
-            <SelectValue placeholder="Select role" />
+            <SelectValue placeholder={t("auth.select_role")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="driver">Driver</SelectItem>
-            <SelectItem value="passenger">Passenger</SelectItem>
+            <SelectItem value="driver">{t("auth.driver")}</SelectItem>
+            <SelectItem value="passenger">{t("auth.passenger")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="su-name">Full name</Label>
-        <Input id="su-name" type="text" placeholder="Priya Sharma" {...register("fullName")} />
-        {errors.fullName && <p className="text-xs text-destructive">{errors.fullName.message}</p>}
+        <Label htmlFor="su-name">{t("auth.full_name")}</Label>
+        <Input id="su-name" type="text" placeholder={t("auth.full_name_ph")} {...register("fullName")} />
+        {errors.fullName && <p className="text-xs text-destructive">{t("auth.name_min")}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="su-email">Email</Label>
-        <Input id="su-email" type="email" placeholder="you@example.com" {...register("email")} />
-        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+        <Label htmlFor="su-email">{t("auth.email")}</Label>
+        <Input id="su-email" type="email" placeholder={t("auth.email_ph")} {...register("email")} />
+        {errors.email && <p className="text-xs text-destructive">{t("auth.valid_email")}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="su-phone">Mobile number</Label>
-        <Input id="su-phone" type="tel" placeholder="+91 98765 43210" inputMode="numeric" {...register("phone")} />
-        {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+        <Label htmlFor="su-phone">{t("auth.mobile")}</Label>
+        <Input id="su-phone" type="tel" placeholder={t("auth.mobile_ph")} inputMode="numeric" {...register("phone")} />
+        {errors.phone && <p className="text-xs text-destructive">{t("auth.valid_mobile")}</p>}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="su-pw">Password</Label>
+        <Label htmlFor="su-pw">{t("auth.password")}</Label>
         <div className="relative">
-          <Input id="su-pw" type={showPw ? "text" : "password"} placeholder="••••••••" {...register("password")} className="pr-10" />
+          <Input id="su-pw" type={showPw ? "text" : "password"} placeholder={t("auth.password_ph")} {...register("password")} className="pr-10" />
           <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
-        {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+        {errors.password && <p className="text-xs text-destructive">{t("auth.password_min")}</p>}
       </div>
       <Button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold">
-        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("auth.signup")}
       </Button>
     </form>
   );
 }
 
 function AuthPage() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -189,14 +193,14 @@ function AuthPage() {
               </div>
               <div>
                 <div className="font-bold text-lg">Ride<span className="text-gradient">Wave</span></div>
-                <div className="text-xs text-muted-foreground">Your journey starts here</div>
+                <div className="text-xs text-muted-foreground">{t("auth.subtitle")}</div>
               </div>
             </div>
 
             <Tabs defaultValue="signin">
               <TabsList className="w-full mb-6 bg-muted/40">
-                <TabsTrigger value="signin" className="flex-1">Sign in</TabsTrigger>
-                <TabsTrigger value="signup" className="flex-1">Create account</TabsTrigger>
+                <TabsTrigger value="signin" className="flex-1">{t("auth.signin")}</TabsTrigger>
+                <TabsTrigger value="signup" className="flex-1">{t("auth.signup")}</TabsTrigger>
               </TabsList>
               <TabsContent value="signin">
                 <SignInForm />

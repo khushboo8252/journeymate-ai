@@ -5,6 +5,7 @@ const Booking = require("../models/Booking");
 const Seat = require("../models/Seat");
 const { protect, restrictTo } = require("../middleware/auth");
 const { generateSeats, getTotalSeats } = require("../utils/seatGenerator");
+const { createRemainingPaymentOrder, processRemainingPayment } = require("../services/paymentService");
 
 const router = express.Router();
 
@@ -158,5 +159,82 @@ router.patch("/:id/cancel", protect, restrictTo("driver"), async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// POST /api/rides/:id/complete-order — Create order for 75% remaining payment on ride completion
+router.post(
+  "/:id/complete-order",
+  protect,
+  async (req, res) => {
+    try {
+      const ride = await Ride.findById(req.params.id);
+      if (!ride) return res.status(404).json({ message: "Ride not found." });
+      if (ride.status !== "active") {
+        return res.status(400).json({ message: "Ride is not active." });
+      }
+      if (ride.paymentStatus !== "PARTIAL_PAID") {
+        return res.status(400).json({ message: "Upfront payment not completed." });
+      }
+
+      const order = await createRemainingPaymentOrder(ride._id, req.user._id);
+      res.json(order);
+    } catch (err) {
+      console.error("Create complete order error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+// POST /api/rides/:id/complete — Complete ride and process remaining payment
+router.post(
+  "/:id/complete",
+  protect,
+  [
+    body("paymentId").notEmpty().withMessage("Payment ID is required"),
+    body("signature").notEmpty().withMessage("Signature is required"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: errors.array()[0].msg });
+    }
+
+    const { paymentId, signature } = req.body;
+    const rideId = req.params.id;
+    const userId = req.user._id;
+
+    try {
+      const ride = await Ride.findById(rideId);
+      if (!ride) return res.status(404).json({ message: "Ride not found." });
+      if (String(ride.driverId) !== String(userId)) {
+        return res.status(403).json({ message: "Only the driver can complete this ride." });
+      }
+      if (ride.status !== "active") {
+        return res.status(400).json({ message: "Ride is not active." });
+      }
+
+      // Process remaining payment
+      const result = await processRemainingPayment(rideId, paymentId, signature, userId);
+
+      // Update ride status to completed
+      ride.status = "completed";
+      await ride.save();
+
+      // Emit real-time events
+      global.io.emit("ride_completed", ride);
+      global.io.to(`driver_${userId}`).emit("driver_ride_completed", ride);
+
+      // Notify all passengers on this ride
+      const bookings = await Booking.find({ rideId, status: "confirmed" });
+      bookings.forEach((booking) => {
+        global.io.to(`user_${booking.passengerId}`).emit("ride_completed", ride);
+      });
+
+      res.json({ success: true, ride, driverEarning: result.driverEarning });
+    } catch (err) {
+      console.error("Complete ride error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
 
 module.exports = router;

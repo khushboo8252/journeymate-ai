@@ -57,6 +57,44 @@ const rideSchema = new mongoose.Schema(
       enum: ["hatchback", "sedan", "suv", "mpv", "van"],
       default: "sedan",
     },
+    // Payment fields
+    totalFare: {
+      type: Number,
+      default: 0,
+    },
+    upfrontPaid: {
+      type: Number,
+      default: 0,
+    },
+    remainingAmount: {
+      type: Number,
+      default: 0,
+    },
+    commissionPercent: {
+      type: Number,
+      default: 10,
+    },
+    driverEarning: {
+      type: Number,
+      default: 0,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["PENDING", "PARTIAL_PAID", "FULL_PAID", "RELEASED"],
+      default: "PENDING",
+    },
+    razorpayOrderId: {
+      type: String,
+      default: null,
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: null,
+    },
+    payoutReleaseAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

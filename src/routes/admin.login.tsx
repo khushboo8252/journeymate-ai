@@ -3,6 +3,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Loader2, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/admin/login")({
 });
 
 function AdminLoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -41,10 +43,10 @@ function AdminLoginPage() {
       }
 
       localStorage.setItem("kshira_admin_token", data.token);
-      toast.success("Welcome, Admin!");
+      toast.success(t("admin.welcome"));
       navigate({ to: "/admin/dashboard" });
     } catch (e: any) {
-      toast.error(e.message || "Login failed");
+      toast.error(e.message || t("admin.login_failed"));
     } finally {
       setLoading(false);
     }
@@ -64,14 +66,14 @@ function AdminLoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Shield className="h-8 w-8 text-primary" />
             </div>
-            <h1 className="text-3xl font-bold mb-2">Admin Panel</h1>
-            <p className="text-muted-foreground">RideWave — Restricted Access</p>
+            <h1 className="text-3xl font-bold mb-2">{t("admin.title")}</h1>
+            <p className="text-muted-foreground">{t("admin.subtitle")}</p>
           </div>
 
           <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
             <form onSubmit={submit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username">{t("admin.username")}</Label>
                 <Input
                   id="username"
                   type="text"
@@ -84,7 +86,7 @@ function AdminLoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t("admin.password")}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -97,14 +99,14 @@ function AdminLoginPage() {
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign in as Admin"}
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : t("admin.sign_in")}
               </Button>
             </form>
 
             <p className="text-center text-sm text-muted-foreground mt-6">
-              Not an admin?{" "}
+              {t("admin.not_admin")}{" "}
               <button onClick={() => navigate({ to: "/" })} className="text-primary hover:underline">
-                Go to home
+                {t("admin.go_home")}
               </button>
             </p>
           </div>

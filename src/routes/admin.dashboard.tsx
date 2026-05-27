@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
 import {
   Loader2,
   LogOut,
@@ -95,6 +96,7 @@ type Booking = {
 };
 
 function AdminDashboard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -143,11 +145,11 @@ function AdminDashboard() {
         }),
       ]);
 
-      if (!statsRes.ok) throw new Error("Failed to fetch stats");
-      if (!usersRes.ok) throw new Error("Failed to fetch users");
-      if (!driversRes.ok) throw new Error("Failed to fetch drivers");
-      if (!ridesRes.ok) throw new Error("Failed to fetch rides");
-      if (!bookingsRes.ok) throw new Error("Failed to fetch bookings");
+      if (!statsRes.ok) throw new Error(t("admin.fetch_stats_failed"));
+      if (!usersRes.ok) throw new Error(t("admin.fetch_users_failed"));
+      if (!driversRes.ok) throw new Error(t("admin.fetch_drivers_failed"));
+      if (!ridesRes.ok) throw new Error(t("admin.fetch_rides_failed"));
+      if (!bookingsRes.ok) throw new Error(t("admin.fetch_bookings_failed"));
 
       setStats(await statsRes.json());
       setUsers(await usersRes.json());
@@ -155,7 +157,7 @@ function AdminDashboard() {
       setRides(await ridesRes.json());
       setBookings(await bookingsRes.json());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load data");
+      toast.error(err instanceof Error ? err.message : t("admin.load_data_failed"));
     }
     setLoading(false);
   };
@@ -166,7 +168,7 @@ function AdminDashboard() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
+    if (!confirm(t("admin.confirm_delete_user"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -175,16 +177,16 @@ function AdminDashboard() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to delete user");
-      toast.success("User deleted successfully");
+      if (!res.ok) throw new Error(t("admin.delete_user_failed"));
+      toast.success(t("admin.user_deleted"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete user");
+      toast.error(err instanceof Error ? err.message : t("admin.delete_user_failed"));
     }
   };
 
   const handleDeleteRide = async (rideId: string) => {
-    if (!confirm("Are you sure you want to delete this ride?")) return;
+    if (!confirm(t("admin.confirm_delete_ride"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -193,16 +195,16 @@ function AdminDashboard() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to delete ride");
-      toast.success("Ride deleted successfully");
+      if (!res.ok) throw new Error(t("admin.delete_ride_failed"));
+      toast.success(t("admin.ride_deleted"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete ride");
+      toast.error(err instanceof Error ? err.message : t("admin.delete_ride_failed"));
     }
   };
 
   const handleDeleteBooking = async (bookingId: string) => {
-    if (!confirm("Are you sure you want to delete this booking?")) return;
+    if (!confirm(t("admin.confirm_delete_booking"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -211,16 +213,16 @@ function AdminDashboard() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to delete booking");
-      toast.success("Booking deleted successfully");
+      if (!res.ok) throw new Error(t("admin.delete_booking_failed"));
+      toast.success(t("admin.booking_deleted"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete booking");
+      toast.error(err instanceof Error ? err.message : t("admin.delete_booking_failed"));
     }
   };
 
   const handleReleasePayment = async (driverId: string) => {
-    if (!confirm("Are you sure you want to release payment to this driver?")) return;
+    if (!confirm(t("admin.confirm_release_payment"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -229,16 +231,16 @@ function AdminDashboard() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to release payment");
-      toast.success("Payment released successfully");
+      if (!res.ok) throw new Error(t("admin.release_payment_failed"));
+      toast.success(t("admin.payment_released"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to release payment");
+      toast.error(err instanceof Error ? err.message : t("admin.release_payment_failed"));
     }
   };
 
   const handleBlockDriver = async (driverId: string) => {
-    if (!confirm("Are you sure you want to block this driver? This will cancel all their active rides.")) return;
+    if (!confirm(t("admin.confirm_block_driver"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -247,16 +249,16 @@ function AdminDashboard() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to block driver");
-      toast.success("Driver blocked successfully");
+      if (!res.ok) throw new Error(t("admin.block_driver_failed"));
+      toast.success(t("admin.driver_blocked"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to block driver");
+      toast.error(err instanceof Error ? err.message : t("admin.block_driver_failed"));
     }
   };
 
   const handleUnblockDriver = async (driverId: string) => {
-    if (!confirm("Are you sure you want to unblock this driver?")) return;
+    if (!confirm(t("admin.confirm_unblock_driver"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -265,16 +267,16 @@ function AdminDashboard() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to unblock driver");
-      toast.success("Driver unblocked successfully");
+      if (!res.ok) throw new Error(t("admin.unblock_driver_failed"));
+      toast.success(t("admin.driver_unblocked"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to unblock driver");
+      toast.error(err instanceof Error ? err.message : t("admin.unblock_driver_failed"));
     }
   };
 
   const handleApproveDriver = async (driverId: string) => {
-    if (!confirm("Are you sure you want to approve this driver?")) return;
+    if (!confirm(t("admin.confirm_approve_driver"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -283,16 +285,16 @@ function AdminDashboard() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to approve driver");
-      toast.success("Driver approved successfully");
+      if (!res.ok) throw new Error(t("admin.approve_driver_failed"));
+      toast.success(t("admin.driver_approved"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to approve driver");
+      toast.error(err instanceof Error ? err.message : t("admin.approve_driver_failed"));
     }
   };
 
   const handleRejectDriver = async (driverId: string) => {
-    if (!confirm("Are you sure you want to reject this driver? This will mark their profile as incomplete.")) return;
+    if (!confirm(t("admin.confirm_reject_driver"))) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
@@ -301,11 +303,11 @@ function AdminDashboard() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to reject driver");
-      toast.success("Driver rejected successfully");
+      if (!res.ok) throw new Error(t("admin.reject_driver_failed"));
+      toast.success(t("admin.driver_rejected"));
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reject driver");
+      toast.error(err instanceof Error ? err.message : t("admin.reject_driver_failed"));
     }
   };
 
@@ -331,13 +333,13 @@ function AdminDashboard() {
               <Shield className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Manage users, rides, and bookings</p>
+              <h1 className="text-2xl font-bold">{t("admin.dashboard")}</h1>
+              <p className="text-sm text-muted-foreground">{t("admin.dashboard_desc")}</p>
             </div>
           </div>
           <Button variant="outline" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
-            Logout
+            {t("admin.logout")}
           </Button>
         </div>
 
@@ -348,11 +350,11 @@ function AdminDashboard() {
           <div className="w-64 flex-shrink-0">
             <nav className="space-y-2">
               {[
-                { id: "stats", label: "Dashboard", icon: LayoutDashboard },
-                { id: "drivers", label: "Drivers", icon: UserCheck },
-                { id: "passengers", label: "Passengers", icon: UserX },
-                { id: "rides", label: "Rides", icon: Car },
-                { id: "bookings", label: "Bookings", icon: Calendar },
+                { id: "stats", label: t("admin.stats.dashboard"), icon: LayoutDashboard },
+                { id: "drivers", label: t("admin.drivers.title"), icon: UserCheck },
+                { id: "passengers", label: t("admin.passengers.title"), icon: UserX },
+                { id: "rides", label: t("admin.rides.title"), icon: Car },
+                { id: "bookings", label: t("admin.bookings.title"), icon: Calendar },
               ].map((tab) => (
                 <Button
                   key={tab.id}
@@ -384,7 +386,7 @@ function AdminDashboard() {
               <div className="p-6 rounded-xl border bg-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-sm text-muted-foreground">{t("admin.stats.users")}</p>
                     <p className="text-3xl font-bold">{stats.users}</p>
                   </div>
                   <Users className="h-8 w-8 text-primary opacity-20" />
@@ -393,7 +395,7 @@ function AdminDashboard() {
               <div className="p-6 rounded-xl border bg-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Rides</p>
+                    <p className="text-sm text-muted-foreground">{t("admin.stats.rides")}</p>
                     <p className="text-3xl font-bold">{stats.rides}</p>
                   </div>
                   <Car className="h-8 w-8 text-primary opacity-20" />
@@ -402,7 +404,7 @@ function AdminDashboard() {
               <div className="p-6 rounded-xl border bg-card">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Bookings</p>
+                    <p className="text-sm text-muted-foreground">{t("admin.stats.bookings")}</p>
                     <p className="text-3xl font-bold">{stats.bookings}</p>
                   </div>
                   <Calendar className="h-8 w-8 text-primary opacity-20" />
@@ -410,19 +412,19 @@ function AdminDashboard() {
               </div>
               <div className="p-6 rounded-xl border bg-card">
                 <div>
-                  <p className="text-sm text-muted-foreground">Active Rides</p>
+                  <p className="text-sm text-muted-foreground">{t("admin.stats.active")}</p>
                   <p className="text-3xl font-bold text-green-600">{stats.activeRides}</p>
                 </div>
               </div>
               <div className="p-6 rounded-xl border bg-card">
                 <div>
-                  <p className="text-sm text-muted-foreground">Completed Rides</p>
+                  <p className="text-sm text-muted-foreground">{t("admin.stats.completed")}</p>
                   <p className="text-3xl font-bold text-blue-600">{stats.completedRides}</p>
                 </div>
               </div>
               <div className="p-6 rounded-xl border bg-card">
                 <div>
-                  <p className="text-sm text-muted-foreground">Cancelled Rides</p>
+                  <p className="text-sm text-muted-foreground">{t("admin.stats.cancelled")}</p>
                   <p className="text-3xl font-bold text-red-600">{stats.cancelledRides}</p>
                 </div>
               </div>
@@ -435,21 +437,21 @@ function AdminDashboard() {
                 <table className="w-full">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Driver</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Email/Contact</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle No.</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Bank Account</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">IFSC</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Total Rides</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Completed</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Active</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Pending Pass.</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Revenue</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Earnings</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Profile</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Approval</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Actions</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.driver")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.email_contact")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.vehicle_no")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.vehicle")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.bank_account")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.ifsc")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.ride_count")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.completed")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.active")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.pending")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.revenue")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.earnings")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.profile")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.approval")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -484,16 +486,16 @@ function AdminDashboard() {
                         <td className="px-4 py-3 text-sm font-medium text-blue-600">₹{((driver.earnings || 0) / 1000).toFixed(1)}k</td>
                         <td className="px-4 py-3 text-sm">
                           {driver.isProfileComplete ? (
-                            <Badge className="bg-green-600 text-xs">Complete</Badge>
+                            <Badge className="bg-green-600 text-xs">{t("admin.drivers.complete")}</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-xs">Incomplete</Badge>
+                            <Badge variant="outline" className="text-xs">{t("admin.drivers.incomplete")}</Badge>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm">
                           {driver.isApproved ? (
-                            <Badge className="bg-green-600 text-xs">Approved</Badge>
+                            <Badge className="bg-green-600 text-xs">{t("admin.drivers.approved")}</Badge>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">Pending</Badge>
+                            <Badge variant="destructive" className="text-xs">{t("admin.drivers.pending_approval")}</Badge>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm">
@@ -506,7 +508,7 @@ function AdminDashboard() {
                                   onClick={() => handleApproveDriver(driver._id)}
                                   className="h-7 px-2 text-xs bg-green-50 text-green-700 hover:bg-green-100"
                                 >
-                                  Approve
+                                  {t("admin.drivers.approve")}
                                 </Button>
                                 <Button
                                   variant="outline"
@@ -514,7 +516,7 @@ function AdminDashboard() {
                                   onClick={() => handleRejectDriver(driver._id)}
                                   className="h-7 px-2 text-xs bg-red-50 text-red-700 hover:bg-red-100"
                                 >
-                                  Reject
+                                  {t("admin.drivers.reject")}
                                 </Button>
                               </>
                             )}
@@ -525,7 +527,7 @@ function AdminDashboard() {
                               disabled={!driver.revenue || driver.revenue === 0}
                               className="h-7 px-2 text-xs"
                             >
-                              Release
+                              {t("admin.drivers.release_payment")}
                             </Button>
                             {driver.isBlocked ? (
                               <Button
@@ -534,7 +536,7 @@ function AdminDashboard() {
                                 onClick={() => handleUnblockDriver(driver._id)}
                                 className="h-7 px-2 text-xs"
                               >
-                                Unblock
+                                {t("admin.drivers.unblock")}
                               </Button>
                             ) : (
                               <Button
@@ -543,7 +545,7 @@ function AdminDashboard() {
                                 onClick={() => handleBlockDriver(driver._id)}
                                 className="h-7 px-2 text-xs"
                               >
-                                Block
+                                {t("admin.drivers.block")}
                               </Button>
                             )}
                           </div>
@@ -561,11 +563,11 @@ function AdminDashboard() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Name</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Admin</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Created</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.name")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.email")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.admin")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.created")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -574,7 +576,7 @@ function AdminDashboard() {
                       <td className="px-4 py-3 text-sm">{user.fullName}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{user.email}</td>
                       <td className="px-4 py-3 text-sm">
-                        {user.isAdmin ? <Badge className="bg-primary">Yes</Badge> : <Badge variant="outline">No</Badge>}
+                        {user.isAdmin ? <Badge className="bg-primary">{t("admin.passengers.yes")}</Badge> : <Badge variant="outline">{t("admin.passengers.no")}</Badge>}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {format(new Date(user.createdAt), "MMM dd, yyyy")}
@@ -601,11 +603,11 @@ function AdminDashboard() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Route</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Driver</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Departure</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.route")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.driver")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.departure")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.status")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -658,12 +660,12 @@ function AdminDashboard() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Passenger</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Ride</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Seats</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Booked</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.passenger")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.ride")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.seats")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.status")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.booked")}</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
