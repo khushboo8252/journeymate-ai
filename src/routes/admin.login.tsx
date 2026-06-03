@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 export const Route = createFileRoute("/admin/login")({
   head: () => ({
     meta: [
-      { title: "Admin Login — RideWave" },
+      { title: "Admin Login — Ukyro" },
     ],
   }),
   component: AdminLoginPage,

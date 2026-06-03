@@ -181,7 +181,16 @@ router.post("/drivers/:id/approve", adminAuth, async (req, res) => {
 });
 
 // POST /api/admin/drivers/:id/reject — reject driver profile
-router.post("/drivers/:id/reject", adminAuth, async (req, res) => {
+router.post("/drivers/:id/reject", 
+  [
+    body("rejectionReason").optional().isString().isLength({ min: 1, max: 500 }).withMessage("Rejection reason must be between 1 and 500 characters"),
+  ],
+  adminAuth, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: errors.array()[0].msg });
+  }
+
   try {
     const driver = await User.findById(req.params.id);
     if (!driver) return res.status(404).json({ message: "Driver not found." });
@@ -189,13 +198,18 @@ router.post("/drivers/:id/reject", adminAuth, async (req, res) => {
 
     driver.isApproved = false;
     driver.isProfileComplete = false;
+    driver.rejectionReason = req.body.rejectionReason || null;
+    driver.hasSeenApprovalNotification = false; // Reset flag to show rejection notification
     await driver.save();
 
     // Send email notification to driver
     await sendDriverApprovalEmail(driver.email, driver.fullName, false);
 
-    // Emit real-time event for driver rejection
-    global.io.to(`user_${driver._id}`).emit("driver_rejected", driver);
+    // Emit real-time event for driver rejection with reason
+    global.io.to(`user_${driver._id}`).emit("driver_rejected", { 
+      driver, 
+      rejectionReason: driver.rejectionReason 
+    });
 
     res.json({ message: "Driver profile rejected successfully" });
   } catch (err) {

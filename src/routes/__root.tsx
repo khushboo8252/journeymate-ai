@@ -35,10 +35,10 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "RideWave — AI carpooling across India" },
+      { title: "Ukyro — AI carpooling across India" },
       { name: "description", content: "Find affordable, trusted carpool rides across India. AI-powered matching, verified drivers, and transparent prices." },
-      { name: "author", content: "RideWave" },
-      { property: "og:title", content: "RideWave — AI carpooling across India" },
+      { name: "author", content: "Ukyro" },
+      { property: "og:title", content: "Ukyro — AI carpooling across India" },
       { property: "og:description", content: "Find affordable, trusted carpool rides across India." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

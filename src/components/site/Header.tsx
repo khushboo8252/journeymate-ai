@@ -33,31 +33,18 @@ export function Header() {
             </div>
           </div>
           <span className="text-lg font-bold tracking-tight">
-            Ride<span className="text-gradient">Wave</span>
+            Uk<span className="text-gradient">yro</span>
           </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
-          <Link to="/search" className="px-3 py-2 text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
-            {t("nav.search")}
-          </Link>
-          <Link to="/publish" className="px-3 py-2 text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
-            {t("nav.publish")}
-          </Link>
-          <Link to="/about" className="px-3 py-2 text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
-            {t("nav.about")}
-          </Link>
+          {/* Navigation removed - only logo remains */}
         </nav>
 
         <div className="flex items-center gap-2">
           <LanguageToggle />
           {user ? (
             <>
-              <Link to="/publish" className="hidden sm:inline-flex">
-                <Button size="sm" variant="outline" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" />Publish
-                </Button>
-              </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="rounded-full ring-2 ring-primary/30 hover:ring-primary/60 transition-all">
@@ -74,11 +61,6 @@ export function Header() {
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
                       <LayoutDashboard className="h-4 w-4" />Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/publish" className="flex items-center gap-2 cursor-pointer">
-                      <Plus className="h-4 w-4" />Publish a ride
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

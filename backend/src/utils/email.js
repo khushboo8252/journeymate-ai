@@ -15,7 +15,7 @@ const sendDriverApprovalRequestEmail = async (driver) => {
     const mailOptions = {
       from: process.env.SMTP_USER,
       to: process.env.ADMIN_EMAIL,
-      subject: "New Driver Approval Request - RideWave",
+      subject: "New Driver Approval Request - Ukyro",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">New Driver Approval Request</h2>
@@ -32,7 +32,7 @@ const sendDriverApprovalRequestEmail = async (driver) => {
           <p>Please review the driver's documents and approve/reject their profile in the admin dashboard.</p>
           
           <p style="margin-top: 30px; color: #666; font-size: 12px;">
-            This is an automated email from RideWave. Please do not reply to this email.
+            This is an automated email from Ukyro. Please do not reply to this email.
           </p>
         </div>
       `,
@@ -47,7 +47,7 @@ const sendDriverApprovalRequestEmail = async (driver) => {
 
 const sendDriverApprovalEmail = async (driverEmail, driverName, approved) => {
   try {
-    const subject = approved ? "Driver Profile Approved - RideWave" : "Driver Profile Rejected - RideWave";
+    const subject = approved ? "Driver Profile Approved - Ukyro" : "Driver Profile Rejected - Ukyro";
     const message = approved
       ? "Congratulations! Your driver profile has been approved. You can now start publishing rides."
       : "Your driver profile has been rejected. Please review your documents and submit again.";
@@ -74,7 +74,7 @@ const sendDriverApprovalEmail = async (driverEmail, driverName, approved) => {
           `}
           
           <p style="margin-top: 30px; color: #666; font-size: 12px;">
-            This is an automated email from RideWave. Please do not reply to this email.
+            This is an automated email from Ukyro. Please do not reply to this email.
           </p>
         </div>
       `,

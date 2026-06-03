@@ -50,6 +50,7 @@ export interface ApiUser {
   vehicleSeats: number | null;
   isProfileComplete: boolean;
   isApproved?: boolean;
+  rejectionReason?: string | null;
   hasSeenApprovalNotification?: boolean;
   createdAt: string;
   updatedAt?: string;

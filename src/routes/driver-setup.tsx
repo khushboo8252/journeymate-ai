@@ -22,7 +22,7 @@ import type { ApiUser } from "@/lib/api";
 export const Route = createFileRoute("/driver-setup")({
   head: () => ({
     meta: [
-      { title: "Driver Setup — RideWave" },
+      { title: "Driver Setup — Ukyro" },
       { name: "description", content: "Complete your driver profile to start publishing rides." },
     ],
   }),
@@ -32,7 +32,6 @@ export const Route = createFileRoute("/driver-setup")({
 const schema = z.object({
   fullName: z.string().min(2),
   phone: z.string().min(10),
-  vehicleType: z.string().min(1),
   vehicleNumber: z.string().min(1),
   vehicleSeats: z.string().min(1),
   bankAccountNumber: z
@@ -77,7 +76,6 @@ function DriverSetupPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       fullName: "",
-      vehicleType: "sedan",
     },
   });
 
@@ -85,7 +83,6 @@ function DriverSetupPage() {
     if (!loading && user) {
       setValue("fullName", user.fullName ?? "");
       setValue("phone", user.phone ?? "");
-      if ((user as any).vehicleType) setValue("vehicleType", (user as any).vehicleType);
       if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
       if (user.role !== "driver") navigate({ to: "/dashboard" });
     }
@@ -199,7 +196,6 @@ function DriverSetupPage() {
       const payload: any = {
         fullName: values.fullName,
         phone: values.phone,
-        vehicleType: values.vehicleType,
         vehicleNumber: values.vehicleNumber,
         vehicleSeats: values.vehicleSeats,
         bankAccountNumber: values.bankAccountNumber,
@@ -364,26 +360,7 @@ function DriverSetupPage() {
                 {t("driver_setup.vehicle")}
               </h2>
               <Separator />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>{t("driver_setup.vehicle_type")}</Label>
-                  <Select
-                    defaultValue="sedan"
-                    onValueChange={v => setValue("vehicleType", v)}
-                  >
-                    <SelectTrigger className="bg-background/60 border-border/40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hatchback">Hatchback (5 seats)</SelectItem>
-                      <SelectItem value="sedan">Sedan (5 seats)</SelectItem>
-                      <SelectItem value="suv">SUV (7 seats)</SelectItem>
-                      <SelectItem value="mpv">MPV (7 seats)</SelectItem>
-                      <SelectItem value="van">Van (10 seats)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.vehicleType && <p className="text-xs text-destructive">{t("driver_setup.vehicle_type")}</p>}
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
                 <div className="space-y-1.5">
                   <Label>{t("driver_setup.vehicle_seats")}</Label>
                   <Select
@@ -394,7 +371,7 @@ function DriverSetupPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                      {[4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
                         <SelectItem key={n} value={String(n)}>{n} seat{n > 1 ? 's' : ''}</SelectItem>
                       ))}
                     </SelectContent>

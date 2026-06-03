@@ -30,7 +30,7 @@ import { SeatPicker, type Seat } from "@/components/seat-picker/SeatPicker";
 export const Route = createFileRoute("/rides/$rideId")({
   head: () => ({
     meta: [
-      { title: "Ride details — RideWave" },
+      { title: "Ride details — Ukyro" },
     ],
   }),
   component: RideDetailPage,
@@ -167,7 +167,7 @@ function RideDetailPage() {
             key: paymentOrder.keyId,
             amount: paymentOrder.amount * 100,
             currency: paymentOrder.currency,
-            name: "RideWave",
+            name: "Ukyro",
             description: `Booking for ${selectedSeats.length} seat(s)`,
             order_id: paymentOrder.orderId,
             handler: async function (response: any) {

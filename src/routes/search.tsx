@@ -26,7 +26,7 @@ export const Route = createFileRoute("/search")({
   validateSearch: searchParams,
   head: () => ({
     meta: [
-      { title: "Search rides — RideWave" },
+      { title: "Search rides — Ukyro" },
       { name: "description", content: "Find shared carpool rides across India." },
     ],
   }),
