@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { getSocket, joinUserRoom, joinDriverRoom } from "@/lib/socket";
+import { getSocket, joinUserRoom, joinDriverRoom, joinRideRoom, emitLocation } from "@/lib/socket";
+import { registerForPushNotifications, onForegroundMessage } from "@/lib/firebase";
 import {
   ArrowRight,
   Calendar,
@@ -16,9 +17,12 @@ import {
   Loader2,
   LogOut,
   MapPin,
+  Navigation,
   Phone,
+  Radio,
   Search,
   ShieldCheck,
+  Square,
   Ticket,
   Trash2,
   User,
@@ -76,6 +80,8 @@ function DashboardPage() {
   const [selectedRideForSeatMap, setSelectedRideForSeatMap] = useState<ApiRide | null>(null);
   const [seatsForMap, setSeatsForMap] = useState<DriverSeat[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
+  const [trackingRideId, setTrackingRideId] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
   const isDriver = user?.role === "driver";
 
   useEffect(() => {
@@ -156,12 +162,23 @@ function DashboardPage() {
       fetchData();
     });
 
+    // Register for push notifications (best-effort; no-op if FCM not configured)
+    registerForPushNotifications();
+
+    // Show foreground push messages as toasts
+    const unsubscribeFcm = onForegroundMessage((payload) => {
+      if (payload.title || payload.body) {
+        toast(payload.title ?? "Notification", { description: payload.body });
+      }
+    });
+
     return () => {
       socket.off("driver_approved");
       socket.off("driver_rejected");
       socket.off("booking_created");
       socket.off("booking_cancelled");
       socket.off("ride_cancelled");
+      unsubscribeFcm();
     };
   }, [user]);
 
@@ -251,68 +268,14 @@ function DashboardPage() {
 
   const completeRide = async (rideId: string) => {
     try {
-      // Create order for remaining 75% payment
-      const orderResponse = await api.post<{ keyId: string; amount: number; currency: string; orderId: string }>(`/api/rides/${rideId}/complete-order`, {});
-      
-      // Check if payment system is configured
-      if (!orderResponse.keyId || orderResponse.keyId === "your_razorpay_key_id") {
-        toast.error("Payment system not configured. Please contact admin.");
-        return;
+      // TEST MODE: Direct ride completion without Razorpay
+      const completeResponse = await api.post<{ success: boolean; ride: any; driverEarning?: number }>(`/api/rides/${rideId}/test-complete`, {});
+      if (completeResponse.driverEarning !== undefined) {
+        toast.success(`Ride completed! Driver earning: ₹${completeResponse.driverEarning}`);
+      } else {
+        toast.success("Ride completed successfully!");
       }
-      
-      // Load Razorpay script dynamically
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      script.onload = () => {
-        const options = {
-          key: orderResponse.keyId,
-          amount: orderResponse.amount * 100,
-          currency: orderResponse.currency,
-          name: "RideWave",
-          description: "Complete ride payment (75% remaining)",
-          order_id: orderResponse.orderId,
-          handler: async function (response: any) {
-            try {
-              // Verify payment and complete ride
-              const completeResponse = await api.post<{ success: boolean; ride: any; driverEarning?: number }>(`/api/rides/${rideId}/complete`, {
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-              });
-              if (completeResponse.driverEarning !== undefined) {
-                toast.success(`Ride completed! Driver earning: ₹${completeResponse.driverEarning}`);
-              } else {
-                toast.success("Ride completed successfully!");
-              }
-              fetchData();
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Failed to complete ride");
-            }
-          },
-          prefill: {
-            name: user?.fullName,
-            email: user?.email,
-          },
-          theme: {
-            color: "#6366f1",
-          },
-          modal: {
-            ondismiss: function() {
-              toast.error("Payment cancelled");
-            },
-          },
-        };
-        try {
-          const rzp = new (window as any).Razorpay(options);
-          rzp.open();
-        } catch (error) {
-          toast.error("Failed to initialize payment. Please try again.");
-        }
-      };
-      script.onerror = () => {
-        toast.error("Failed to load payment gateway. Please check your internet connection.");
-      };
-      document.body.appendChild(script);
+      fetchData();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to complete ride";
       // If the error is about payment status, provide a more helpful message
@@ -323,6 +286,66 @@ function DashboardPage() {
       }
     }
   };
+
+  // ── Live GPS tracking (driver) ──
+  const startRideTracking = async (rideId: string) => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    try {
+      await api.post(`/api/tracking/${rideId}/start`, {});
+      joinRideRoom(rideId);
+
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!user) return;
+          emitLocation({
+            rideId,
+            driverId: user._id,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            speed: pos.coords.speed ?? 0,
+            heading: pos.coords.heading ?? null,
+          });
+        },
+        (err) => {
+          toast.error(`GPS error: ${err.message}`);
+        },
+        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+      );
+
+      watchIdRef.current = watchId;
+      setTrackingRideId(rideId);
+      toast.success("Ride started — sharing live location");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start ride");
+    }
+  };
+
+  const stopRideTracking = async (rideId: string) => {
+    try {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      await api.post(`/api/tracking/${rideId}/stop`, {});
+      setTrackingRideId(null);
+      toast.success("Ride tracking stopped");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to stop ride");
+    }
+  };
+
+  // Clean up GPS watcher on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, []);
 
   const handlePopupClick = async () => {
     // Mark notification as seen
@@ -490,6 +513,15 @@ function DashboardPage() {
                         <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
                           <Users className="h-4 w-4 mr-1" />Seat Map
                         </Button>
+                        {trackingRideId === ride._id ? (
+                          <Button size="sm" variant="default" onClick={() => stopRideTracking(ride._id)} className="bg-red-600 hover:bg-red-700">
+                            <Square className="h-4 w-4 mr-1" />Stop Ride
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="default" onClick={() => startRideTracking(ride._id)} className="bg-blue-600 hover:bg-blue-700">
+                            <Navigation className="h-4 w-4 mr-1" />Start Ride
+                          </Button>
+                        )}
                         <Button size="sm" variant="default" onClick={() => completeRide(ride._id)} className="bg-green-600 hover:bg-green-700">
                           <Check className="h-4 w-4 mr-1" />Complete
                         </Button>
@@ -614,6 +646,13 @@ function DashboardPage() {
                       <Badge variant={booking.status === "confirmed" ? "default" : "secondary"} className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
                         {booking.status}
                       </Badge>
+                      {booking.status === "confirmed" && ride && (
+                        <Link to="/rides/$rideId/track" params={{ rideId: ride._id }}>
+                          <Button size="sm" variant="default" className="bg-blue-600 hover:bg-blue-700">
+                            <Radio className="h-4 w-4 mr-1" />Track
+                          </Button>
+                        </Link>
+                      )}
                       {booking.status === "confirmed" && (
                         <Button size="sm" variant="ghost" onClick={() => cancelBooking(booking._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="h-4 w-4" />

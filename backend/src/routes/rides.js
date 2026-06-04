@@ -5,7 +5,8 @@ const Booking = require("../models/Booking");
 const Seat = require("../models/Seat");
 const { protect, restrictTo } = require("../middleware/auth");
 const { generateSeats, getTotalSeats } = require("../utils/seatGenerator");
-const { createRemainingPaymentOrder, processRemainingPayment } = require("../services/paymentService");
+const { createRemainingPaymentOrder, processRemainingPayment, calculateRidePrice } = require("../services/paymentService");
+const { notifyRidePassengers } = require("../services/notificationService");
 
 const router = express.Router();
 
@@ -43,6 +44,15 @@ router.get("/", async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// GET /api/rides/pricing?fare=300 — preview pricing for a given driver fare
+router.get("/pricing", (req, res) => {
+  const fare = Number(req.query.fare);
+  if (!fare || fare <= 0) {
+    return res.status(400).json({ message: "fare query param must be a positive number" });
+  }
+  res.json(calculateRidePrice(fare));
 });
 
 // GET /api/rides/my — current user's rides as driver
@@ -95,6 +105,9 @@ router.post(
       // Get total seats based on vehicle type
       const seatsTotal = getTotalSeats(vehicleType);
 
+      // Calculate passenger-facing price using the new formula
+      const pricing = calculateRidePrice(Number(pricePerSeat));
+
       const ride = await Ride.create({
         driverId: req.user._id,
         origin,
@@ -103,7 +116,12 @@ router.post(
         arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
         seatsTotal,
         seatsAvailable: seatsTotal - 1, // Minus driver seat
-        pricePerSeat: Number(pricePerSeat),
+        // pricePerSeat = passenger-facing total (what's shown in listings)
+        pricePerSeat:  pricing.totalAmount,
+        // Pricing breakdown
+        driverFare:    pricing.driverFare,
+        platformFee:   pricing.platformFee,
+        extraCharge:   pricing.extraCharge,
         description: description || null,
         vehicleType,
       });
@@ -154,8 +172,65 @@ router.patch("/:id/cancel", protect, restrictTo("driver"), async (req, res) => {
       global.io.to(`user_${booking.passengerId}`).emit("ride_cancelled", ride);
     });
 
+    // Push notification to all affected passengers
+    notifyRidePassengers(ride._id, {
+      title: "Ride Cancelled",
+      body: `Your ride ${ride.origin} → ${ride.destination} has been cancelled by the driver.`,
+      data: { type: "ride_cancelled", rideId: ride._id.toString() },
+    });
+
     res.json(ride);
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/rides/:id/test-complete — Test mode: complete ride without Razorpay (development only)
+router.post("/:id/test-complete", protect, async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ message: "Test mode not allowed in production." });
+  }
+
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (String(ride.driverId) !== String(userId)) {
+      return res.status(403).json({ message: "Only the driver can complete this ride." });
+    }
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Ride is not active." });
+    }
+
+    console.log("TEST MODE: Completing ride without Razorpay", rideId);
+
+    // Update ride with mock payment data
+    ride.razorpayPaymentId = `test_payment_${Date.now()}`;
+    ride.paymentStatus = "FULL_PAID";
+    ride.commissionPercent = 10;
+    ride.driverEarning = (ride.totalFare || ride.pricePerSeat) * 0.9;
+    await ride.save();
+
+    // Update ride status to completed
+    ride.status = "completed";
+    await ride.save();
+
+    // Emit real-time events
+    global.io.emit("ride_completed", ride);
+    global.io.to(`driver_${userId}`).emit("driver_ride_completed", ride);
+
+    // Notify all passengers on this ride
+    await notifyRidePassengers(rideId, {
+      title: "Ride Completed",
+      body: "Your ride has been completed. Please rate your experience.",
+      data: { rideId },
+    });
+
+    res.json({ success: true, ride, driverEarning: ride.driverEarning });
+  } catch (err) {
+    console.error("Test complete ride error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -198,7 +273,7 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { paymentId, signature } = req.body;
+    const { paymentId, signature, testMode } = req.body;
     const rideId = req.params.id;
     const userId = req.user._id;
 
@@ -212,8 +287,18 @@ router.post(
         return res.status(400).json({ message: "Ride is not active." });
       }
 
-      // Process remaining payment
-      const result = await processRemainingPayment(rideId, paymentId, signature, userId);
+      // Process remaining payment (skip Razorpay verification in test mode)
+      if (testMode && process.env.NODE_ENV !== "production") {
+        console.log("TEST MODE: Skipping Razorpay verification for ride completion", rideId);
+        // Update ride with mock payment data
+        ride.razorpayPaymentId = paymentId;
+        ride.paymentStatus = "FULL_PAID";
+        ride.commissionPercent = 10;
+        ride.driverEarning = (ride.totalFare || ride.pricePerSeat) * 0.9;
+        await ride.save();
+      } else {
+        const result = await processRemainingPayment(rideId, paymentId, signature, userId);
+      }
 
       // Update ride status to completed
       ride.status = "completed";

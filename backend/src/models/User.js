@@ -111,6 +111,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Firebase Cloud Messaging device tokens for push notifications
+    fcmTokens: {
+      type: [String],
+      default: [],
+    },
     passwordChangedAt: {
       type: Date,
       select: false,

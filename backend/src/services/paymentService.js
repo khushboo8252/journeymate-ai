@@ -4,26 +4,56 @@ const Transaction = require("../models/Transaction");
 const { createOrder, verifyPayment, fetchPayment, createPayout } = require("../utils/razorpay");
 const { payoutQueue } = require("../config/queue");
 
-const UPFRONT_PERCENTAGE = 0.25; // 25% upfront
-const COMMISSION_PERCENTAGE = 0.10; // 10% platform commission
-const PAYOUT_DELAY_HOURS = 3; // 3 hours delay for driver payout
+const PLATFORM_FEE_RATE = 0.3333;  // ~33.33% of driver fare → platform fee
+const EXTRA_CHARGE_RATE = 0.30;     // 30% of platform fee → extra/convenience charge
+const UPFRONT_PERCENTAGE = 0.25;    // 25% of total paid upfront
+const PAYOUT_DELAY_HOURS = 3;       // 3 hours delay for driver payout
 
 /**
- * Calculate payment amounts for a ride
- * @param {number} totalFare - Total fare for the ride
+ * Calculate pricing breakdown from the driver's fare.
+ * Formula:
+ *   platformFee    = round(driverFare × 0.3333)
+ *   extraCharge    = round(platformFee × 0.30)
+ *   totalAmount    = driverFare + platformFee + extraCharge
+ *   bookingAmount  = round(totalAmount × 0.25)   ← paid now
+ *   remainingAmount= totalAmount − bookingAmount  ← paid on completion
+ *   driverEarning  = driverFare  (driver always gets their own fare, not more)
+ *   platformRevenue= totalAmount − driverFare
+ */
+const calculateRidePrice = (driverFare) => {
+  const platformFee    = Math.round(driverFare * PLATFORM_FEE_RATE);
+  const extraCharge    = Math.round(platformFee * EXTRA_CHARGE_RATE);
+  const totalAmount    = driverFare + platformFee + extraCharge;
+  const bookingAmount  = Math.round(totalAmount * UPFRONT_PERCENTAGE);
+  const remainingAmount = totalAmount - bookingAmount;
+  const platformRevenue = platformFee + extraCharge;
+  const driverEarning  = driverFare; // driver always gets exactly their stated fare
+
+  return {
+    driverFare,
+    platformFee,
+    extraCharge,
+    totalAmount,
+    bookingAmount,
+    remainingAmount,
+    driverEarning,
+    platformRevenue,
+  };
+};
+
+/**
+ * Legacy wrapper — used by older code paths that call calculatePaymentAmounts(totalFare).
+ * Here totalFare is already the passenger-facing total, so we split it directly.
  */
 const calculatePaymentAmounts = (totalFare) => {
-  const upfrontAmount = Math.round(totalFare * UPFRONT_PERCENTAGE);
+  const upfrontAmount   = Math.round(totalFare * UPFRONT_PERCENTAGE);
   const remainingAmount = totalFare - upfrontAmount;
-  const commission = Math.round(remainingAmount * COMMISSION_PERCENTAGE);
-  const driverEarning = remainingAmount - commission;
-
   return {
     totalFare,
     upfrontAmount,
     remainingAmount,
-    commission,
-    driverEarning,
+    commission: 0,
+    driverEarning: remainingAmount,
   };
 };
 
@@ -40,34 +70,43 @@ const createUpfrontPaymentOrder = async (rideId, userId, seatsBooked = 1) => {
       throw new Error("Ride not found");
     }
 
-    // Calculate total fare based on seats actually booked
-    const totalFare = ride.pricePerSeat * seatsBooked;
-    const { upfrontAmount } = calculatePaymentAmounts(totalFare);
+    // Use new pricing formula: driverFare is pricePerSeat (what driver entered)
+    const pricing = calculateRidePrice(ride.driverFare || ride.pricePerSeat);
+    const totalFare     = pricing.totalAmount * seatsBooked;
+    const bookingAmount = pricing.bookingAmount * seatsBooked;
+    const remaining     = pricing.remainingAmount * seatsBooked;
 
-    // Update ride with payment details
-    ride.totalFare = totalFare;
-    ride.upfrontPaid = 0;
-    ride.remainingAmount = totalFare - upfrontAmount;
-    ride.driverEarning = 0;
+    // Persist pricing snapshot on the ride
+    ride.totalFare        = totalFare;
+    ride.upfrontPaid      = 0;
+    ride.remainingAmount  = remaining;
+    ride.driverEarning    = pricing.driverEarning * seatsBooked;
     await ride.save();
 
-    // Create Razorpay order
+    // Create Razorpay order for upfront amount (25%)
     const receipt = `ride_${rideId}_upfront`;
-    const order = await createOrder(upfrontAmount, receipt, {
+    const order = await createOrder(bookingAmount, receipt, {
       userId,
       rideId,
       type: "upfront",
     });
 
-    // Update ride with Razorpay order ID
     ride.razorpayOrderId = order.id;
     await ride.save();
 
     return {
       orderId: order.id,
-      amount: upfrontAmount,
+      amount: bookingAmount,
       currency: "INR",
       keyId: process.env.RAZORPAY_KEY_ID,
+      pricing: {
+        driverFare:      pricing.driverFare * seatsBooked,
+        platformFee:     pricing.platformFee * seatsBooked,
+        extraCharge:     pricing.extraCharge * seatsBooked,
+        totalAmount:     totalFare,
+        bookingAmount,
+        remainingAmount: remaining,
+      },
     };
   } catch (error) {
     console.error("Create upfront payment order error:", error);
@@ -339,6 +378,7 @@ const releaseDriverPayment = async (rideId) => {
 };
 
 module.exports = {
+  calculateRidePrice,
   calculatePaymentAmounts,
   createUpfrontPaymentOrder,
   processUpfrontPayment,
@@ -346,6 +386,7 @@ module.exports = {
   processRemainingPayment,
   releaseDriverPayment,
   UPFRONT_PERCENTAGE,
-  COMMISSION_PERCENTAGE,
+  PLATFORM_FEE_RATE,
+  EXTRA_CHARGE_RATE,
   PAYOUT_DELAY_HOURS,
 };

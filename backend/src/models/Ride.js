@@ -58,6 +58,18 @@ const rideSchema = new mongoose.Schema(
       default: "sedan",
     },
     // Payment fields
+    driverFare: {
+      type: Number,
+      default: 0,
+    },
+    platformFee: {
+      type: Number,
+      default: 0,
+    },
+    extraCharge: {
+      type: Number,
+      default: 0,
+    },
     totalFare: {
       type: Number,
       default: 0,
@@ -69,10 +81,6 @@ const rideSchema = new mongoose.Schema(
     remainingAmount: {
       type: Number,
       default: 0,
-    },
-    commissionPercent: {
-      type: Number,
-      default: 10,
     },
     driverEarning: {
       type: Number,
@@ -94,6 +102,12 @@ const rideSchema = new mongoose.Schema(
     payoutReleaseAt: {
       type: Date,
       default: null,
+    },
+    // Live tracking
+    liveTracking: {
+      isActive: { type: Boolean, default: false },
+      startedAt: { type: Date, default: null },
+      endedAt: { type: Date, default: null },
     },
   },
   { timestamps: true }

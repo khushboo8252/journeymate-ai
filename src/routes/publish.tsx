@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Car, Loader2, Lock } from "lucide-react";
+import { Car, ChevronRight, IndianRupee, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Header } from "@/components/site/Header";
@@ -11,6 +11,7 @@ import { Footer } from "@/components/site/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
@@ -39,15 +40,28 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+function calculateRidePrice(driverFare: number) {
+  const platformFee    = Math.round(driverFare * 0.3333);
+  const extraCharge    = Math.round(platformFee * 0.30);
+  const totalAmount    = driverFare + platformFee + extraCharge;
+  const bookingAmount  = Math.round(totalAmount * 0.25);
+  const remainingAmount = totalAmount - bookingAmount;
+  return { driverFare, platformFee, extraCharge, totalAmount, bookingAmount, remainingAmount };
+}
+
 function PublishPage() {
   const { t } = useTranslation();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { vehicleType: "sedan" },
   });
+
+  const priceValue = useWatch({ control, name: "price" });
+  const driverFare = Number(priceValue) || 0;
+  const pricing = driverFare > 0 ? calculateRidePrice(driverFare) : null;
 
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
@@ -143,11 +157,54 @@ function PublishPage() {
                 {errors.vehicleType && <p className="text-xs text-destructive">{t("driver_setup.vehicle_type")}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>{t("publish.price")}</Label>
-                <Input type="number" placeholder={t("publish.price_ph")} min={1} {...register("price")} />
-                {errors.price && <p className="text-xs text-destructive">{t("publish.price")}</p>}
+                <Label>{t("publish.price")} <span className="text-muted-foreground text-xs">(your fare per seat)</span></Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input type="number" placeholder="e.g. 300" min={1} className="pl-8" {...register("price")} />
+                </div>
+                {errors.price && <p className="text-xs text-destructive">Enter a valid price</p>}
               </div>
             </div>
+
+            {/* ── Live pricing preview ── */}
+            {pricing && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-border/50 bg-muted/30 p-4 space-y-2.5"
+              >
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Passenger will pay</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Ride Fare (your share)</span>
+                    <span className="font-medium">₹{pricing.driverFare}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Platform Fee</span>
+                    <span className="font-medium">₹{pricing.platformFee}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Convenience Charge</span>
+                    <span className="font-medium">₹{pricing.extraCharge}</span>
+                  </div>
+                  <Separator className="my-1" />
+                  <div className="flex justify-between font-semibold text-base">
+                    <span>Total per seat</span>
+                    <span className="text-primary">₹{pricing.totalAmount}</span>
+                  </div>
+                  <Separator className="my-1" />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><ChevronRight className="h-3 w-3" />Pay now (25%)</span>
+                    <span>₹{pricing.bookingAmount}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><ChevronRight className="h-3 w-3" />Pay on completion (75%)</span>
+                    <span>₹{pricing.remainingAmount}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-emerald-400 font-medium pt-1">✓ You earn ₹{pricing.driverFare} per seat</p>
+              </motion.div>
+            )}
 
             <div className="space-y-1.5">
               <Label>Notes for passengers <span className="text-muted-foreground text-xs">(optional)</span></Label>

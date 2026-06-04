@@ -135,7 +135,21 @@ function RideDetailPage() {
     setBooking(true);
     try {
       // First lock the seats (IRCTC style - lock only on book button click)
-      await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
+      try {
+        await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
+      } catch (lockError: any) {
+        // Handle seat lock errors (seats already booked/locked)
+        const errorMsg = lockError.response?.data?.error || lockError.message;
+        const failedSeats = lockError.response?.data?.failedSeats;
+        if (failedSeats && failedSeats.length > 0) {
+          toast.error(`Seats ${failedSeats.join(", ")} are not available. Please select other seats.`);
+        } else {
+          toast.error(errorMsg || "Failed to lock seats. Please try again.");
+        }
+        fetchSeats(); // Refresh seat status
+        setBooking(false);
+        return;
+      }
       
       // Create booking (will return payment order)
       const bookingResponse = await api.post<{
@@ -158,71 +172,22 @@ function RideDetailPage() {
           return;
         }
         
-        // Load Razorpay script dynamically
-        const script = document.createElement("script");
-        script.src = "https://checkout.razorpay.com/v1/checkout.js";
-        script.async = true;
-        script.onload = () => {
-          const options = {
-            key: paymentOrder.keyId,
-            amount: paymentOrder.amount * 100,
-            currency: paymentOrder.currency,
-            name: "RideWave",
-            description: `Booking for ${selectedSeats.length} seat(s)`,
-            order_id: paymentOrder.orderId,
-            handler: async function (response: any) {
-              try {
-                // Verify payment and confirm booking
-                await api.post("/api/bookings/confirm", {
-                  bookingId: bookingResponse.booking._id,
-                  paymentId: response.razorpay_payment_id,
-                  signature: response.razorpay_signature,
-                });
-                toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
-                setAlreadyBooked(true);
-                setSelectedSeats([]);
-                fetchRide();
-                fetchSeats();
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
-                // Release the locked seats on error
-                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-                fetchSeats();
-              }
-            },
-            prefill: {
-              name: user.fullName,
-              email: user.email,
-            },
-            theme: {
-              color: "#6366f1",
-            },
-            modal: {
-              ondismiss: function() {
-                toast.error("Payment cancelled");
-                // Release the locked seats
-                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-                fetchSeats();
-              },
-            },
-          };
-          try {
-            const rzp = new (window as any).Razorpay(options);
-            rzp.open();
-          } catch (error) {
-            toast.error("Failed to initialize payment. Please try again.");
-            // Release the locked seats
-            api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-            fetchSeats();
-          }
-        };
-        script.onerror = () => {
-          toast.error("Failed to load payment gateway. Please check your internet connection.");
-          // Release the locked seats
+        // TEST MODE: Direct booking confirmation without Razorpay
+        try {
+          await api.post("/api/bookings/test-confirm", {
+            bookingId: bookingResponse.booking._id,
+          });
+          toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
+          setAlreadyBooked(true);
+          setSelectedSeats([]);
+          fetchRide();
+          fetchSeats();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
+          // Release the locked seats on error
           api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
           fetchSeats();
-        };
-        document.body.appendChild(script);
+        }
       } else {
         toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
         setAlreadyBooked(true);
@@ -503,26 +468,43 @@ function RideDetailPage() {
 
                   {canBook && (
                     <>
-                      {/* Seat count + price row */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          {selectedSeats.length === 0 ? (
-                            <span className="text-amber-400 text-xs">{t("ride_details.select_seats_hint")}</span>
-                          ) : (
-                            <span>
-                              <span className="font-semibold text-foreground">{selectedSeats.length}</span>
-                              {" "}{t("ride_details.passenger")}
-                            </span>
-                          )}
-                        </div>
-                        {selectedSeats.length > 0 && (
-                          <div className="flex items-baseline gap-0.5 font-bold text-xl">
-                            <IndianRupee className="h-4 w-4" />
-                            {(Number(ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}
-                            <span className="text-xs font-normal text-muted-foreground">.00</span>
+                      {selectedSeats.length === 0 ? (
+                        <p className="text-xs text-amber-400 text-center">{t("ride_details.select_seats_hint")}</p>
+                      ) : (
+                        /* ── Fare breakdown ── */
+                        <div className="space-y-1.5 text-sm">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Ride Fare × {selectedSeats.length}</span>
+                            <span>₹{((ride.driverFare ?? ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}</span>
                           </div>
-                        )}
-                      </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Platform Fee</span>
+                            <span>₹{((ride.platformFee ?? 0) * selectedSeats.length).toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Convenience</span>
+                            <span>₹{((ride.extraCharge ?? 0) * selectedSeats.length).toLocaleString("en-IN")}</span>
+                          </div>
+                          <Separator />
+                          <div className="flex justify-between font-bold text-base">
+                            <span>Total</span>
+                            <div className="flex items-baseline gap-0.5">
+                              <IndianRupee className="h-3.5 w-3.5" />
+                              <span>{(Number(ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}</span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 space-y-0.5 text-xs">
+                            <div className="flex justify-between text-primary font-semibold">
+                              <span>Pay now (25%)</span>
+                              <span>₹{Math.round(Number(ride.pricePerSeat) * selectedSeats.length * 0.25)}</span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Pay on completion (75%)</span>
+                              <span>₹{Math.round(Number(ride.pricePerSeat) * selectedSeats.length * 0.75)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Book button */}
                       <Button

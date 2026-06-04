@@ -37,7 +37,8 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  delete: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "DELETE", body: body ? JSON.stringify(body) : undefined }),
 };
 
 export interface ApiUser {
@@ -65,6 +66,9 @@ export interface ApiRide {
   seatsTotal: number;
   seatsAvailable: number;
   pricePerSeat: number;
+  driverFare?: number;
+  platformFee?: number;
+  extraCharge?: number;
   description: string | null;
   vehicleType?: "hatchback" | "sedan" | "suv" | "mpv" | "van";
   status: "active" | "completed" | "cancelled";

@@ -19,6 +19,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RidesRideIdRouteImport } from './routes/rides.$rideId'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
+import { Route as RidesRideIdTrackRouteImport } from './routes/rides.$rideId_.track'
 
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
@@ -70,6 +71,11 @@ const AdminDashboardRoute = AdminDashboardRouteImport.update({
   path: '/admin/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RidesRideIdTrackRoute = RidesRideIdTrackRouteImport.update({
+  id: '/rides/$rideId_/track',
+  path: '/rides/$rideId/track',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
+  '/rides/$rideId/track': typeof RidesRideIdTrackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
+  '/rides/$rideId/track': typeof RidesRideIdTrackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
+  '/rides/$rideId_/track': typeof RidesRideIdTrackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/admin/dashboard'
     | '/admin/login'
     | '/rides/$rideId'
+    | '/rides/$rideId/track'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/admin/dashboard'
     | '/admin/login'
     | '/rides/$rideId'
+    | '/rides/$rideId/track'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/admin/dashboard'
     | '/admin/login'
     | '/rides/$rideId'
+    | '/rides/$rideId_/track'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminLoginRoute: typeof AdminLoginRoute
   RidesRideIdRoute: typeof RidesRideIdRoute
+  RidesRideIdTrackRoute: typeof RidesRideIdTrackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -232,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rides/$rideId_/track': {
+      id: '/rides/$rideId_/track'
+      path: '/rides/$rideId/track'
+      fullPath: '/rides/$rideId/track'
+      preLoaderRoute: typeof RidesRideIdTrackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDashboardRoute: AdminDashboardRoute,
   AdminLoginRoute: AdminLoginRoute,
   RidesRideIdRoute: RidesRideIdRoute,
+  RidesRideIdTrackRoute: RidesRideIdTrackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

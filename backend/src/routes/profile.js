@@ -141,4 +141,32 @@ router.post("/notification-seen", protect, restrictTo("driver"), async (req, res
   }
 });
 
+// POST /api/profile/fcm-token — register an FCM device token for push notifications
+router.post("/fcm-token", protect, async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ message: "FCM token is required" });
+  try {
+    await User.findByIdAndUpdate(req.user._id, {
+      $addToSet: { fcmTokens: token },
+    });
+    res.json({ status: "success" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/profile/fcm-token — remove an FCM device token (on logout)
+router.delete("/fcm-token", protect, async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ message: "FCM token is required" });
+  try {
+    await User.findByIdAndUpdate(req.user._id, {
+      $pull: { fcmTokens: token },
+    });
+    res.json({ status: "success" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

@@ -100,6 +100,7 @@ router.post('/rides/:rideId/seats/lock', protect, async (req, res) => {
 
     if (result.failedSeats.length > 0) {
       // Some seats were already locked or booked by other users
+      console.log(`Seat lock failed for seats: ${result.failedSeats.join(', ')}`);
       return res.status(400).json({
         error: 'Some seats are not available',
         failedSeats: result.failedSeats,
