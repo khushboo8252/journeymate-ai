@@ -88,35 +88,6 @@ function PublishPage() {
     );
   }
 
-  if (user.role === "driver" && !user.isApproved) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center px-4 py-24">
-          <div className="glass rounded-2xl p-10 text-center max-w-md w-full">
-            <Lock className="h-10 w-10 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Driver Approval Required</h2>
-            <p className="text-muted-foreground mb-6">
-              Your driver account is pending approval from the admin. You can publish rides once your account is approved.
-            </p>
-            {user.rejectionReason && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm font-medium text-red-800 mb-1">Rejection Reason:</p>
-                <p className="text-sm text-red-600">{user.rejectionReason}</p>
-              </div>
-            )}
-            <Link to="/dashboard">
-              <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
-                Go to Dashboard
-              </Button>
-            </Link>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />

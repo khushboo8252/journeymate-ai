@@ -14,6 +14,9 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import { DriverLocationMap } from "@/components/maps/DriverLocationMap";
+import { LocationTracker } from "@/components/driver/LocationTracker";
+import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
@@ -53,6 +56,10 @@ function RideDetailPage() {
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
   const [lockingSeats, setLockingSeats] = useState(false);
+  
+  // Live location state
+  const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
   const toggleSeat = (seatNumber: string) => {
     setSelectedSeats(prev =>
@@ -68,6 +75,78 @@ function RideDetailPage() {
   useEffect(() => {
     if (user && ride) checkExistingBooking();
   }, [user, ride]);
+
+  // Listen for location updates via WebSocket
+  useEffect(() => {
+    if (!ride) return;
+
+    const socket = getSocket();
+
+    // Listen for driver location updates
+    socket.on("driver_location_updated", (data: any) => {
+      if (data.rideId === ride._id && data.currentLocation) {
+        setDriverLocation({
+          latitude: data.currentLocation.latitude,
+          longitude: data.currentLocation.longitude,
+        });
+        setIsTrackingLocation(true);
+      }
+    });
+
+    // Listen for location tracking started
+    socket.on("location_tracking_started", (data: any) => {
+      if (data.rideId === ride._id) {
+        setIsTrackingLocation(true);
+      }
+    });
+
+    // Listen for location tracking stopped
+    socket.on("location_tracking_stopped", (data: any) => {
+      if (data.rideId === ride._id) {
+        setIsTrackingLocation(false);
+      }
+    });
+
+    // Listen for ride completion confirmation events
+    socket.on("driver_confirmed_completion", (data: any) => {
+      if (data.rideId === ride._id && !isDriver) {
+        toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
+        fetchRide();
+      }
+    });
+
+    socket.on("passenger_confirmed_completion", (data: any) => {
+      if (data.rideId === ride._id && isDriver) {
+        toast.success("Passenger has confirmed ride completion.");
+        fetchRide();
+      }
+    });
+
+    socket.on("ride_completed", (data: any) => {
+      if (data.rideId === ride._id) {
+        toast.success("Ride completed successfully!");
+        fetchRide();
+      }
+    });
+
+    // Initialize location from ride data
+    if (ride.currentLocation?.latitude && ride.currentLocation?.longitude) {
+      setDriverLocation({
+        latitude: ride.currentLocation.latitude,
+        longitude: ride.currentLocation.longitude,
+      });
+      setIsTrackingLocation(ride.isTrackingLocation || false);
+    }
+
+    return () => {
+      socket.off("driver_location_updated");
+      socket.off("location_tracking_started");
+      socket.off("location_tracking_stopped");
+      socket.off("driver_confirmed_completion");
+      socket.off("passenger_confirmed_completion");
+      socket.off("ride_completed");
+    };
+  }, [ride]);
 
   const fetchRide = async () => {
     try {
@@ -391,6 +470,16 @@ function RideDetailPage() {
 
                 {/* Driver details list */}
                 <div className="p-5 space-y-3">
+                  {/* Location tracking controls for driver */}
+                  {isDriver && ride.status === "active" && (
+                    <div className="pt-3 border-t border-border/30">
+                      <LocationTracker
+                        rideId={ride._id}
+                        isTracking={isTrackingLocation}
+                        onTrackingChange={setIsTrackingLocation}
+                      />
+                    </div>
+                  )}
                   {/* Instant booking */}
                   <div className="flex items-center gap-3 text-sm">
                     <Zap className="h-4 w-4 text-primary shrink-0" />
@@ -431,6 +520,18 @@ function RideDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* ── Live Location Map (for passengers when tracking is active) ── */}
+              {!isDriver && driverLocation && (
+                <div className="glass rounded-2xl p-6">
+                  <h3 className="font-semibold text-base mb-4">Driver's Live Location</h3>
+                  <DriverLocationMap
+                    latitude={driverLocation.latitude}
+                    longitude={driverLocation.longitude}
+                    isTracking={isTrackingLocation}
+                  />
+                </div>
+              )}
 
             </div>
 
@@ -541,6 +642,42 @@ function RideDetailPage() {
 
                   {!canBook && ride.seatsAvailable === 0 && !isDriver && !alreadyBooked && user && (
                     <p className="text-center text-sm text-muted-foreground py-2">{t("ride_details.fully_booked")}</p>
+                  )}
+
+                  {/* Ride completion confirmation for passengers */}
+                  {alreadyBooked && ride.status === "active" && (
+                    <div className="space-y-3 pt-3 border-t border-border/30">
+                      <div className="text-center space-y-2">
+                        {ride.confirmByDriver && !ride.confirmByPassenger && (
+                          <p className="text-sm text-green-600 font-medium">Driver has confirmed ride completion. Please confirm.</p>
+                        )}
+                        {!ride.confirmByDriver && ride.confirmByPassenger && (
+                          <p className="text-sm text-amber-600 font-medium">Waiting for driver to confirm.</p>
+                        )}
+                        {ride.confirmByDriver && ride.confirmByPassenger && (
+                          <p className="text-sm text-green-600 font-medium">Ride completed!</p>
+                        )}
+                        {!ride.confirmByDriver && !ride.confirmByPassenger && (
+                          <p className="text-sm text-muted-foreground">Confirm ride completion when done.</p>
+                        )}
+                      </div>
+                      {!ride.confirmByPassenger && (
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await api.patch(`/api/rides/${rideId}/confirm/passenger`);
+                              toast.success("Ride completion confirmed!");
+                              fetchRide();
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : "Failed to confirm");
+                            }
+                          }}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
+                        >
+                          Confirm Ride Complete
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

@@ -217,6 +217,7 @@ router.post(
 
       // Update ride status to completed
       ride.status = "completed";
+      ride.isTrackingLocation = false; // Stop location tracking
       await ride.save();
 
       // Emit real-time events
@@ -236,5 +237,279 @@ router.post(
     }
   }
 );
+
+// PATCH /api/rides/:id/location — Update driver location (drivers only)
+router.patch(
+  "/:id/location",
+  protect,
+  restrictTo("driver"),
+  [
+    body("latitude").isFloat({ min: -90, max: 90 }).withMessage("Valid latitude required"),
+    body("longitude").isFloat({ min: -180, max: 180 }).withMessage("Valid longitude required"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: errors.array()[0].msg });
+    }
+
+    const { latitude, longitude } = req.body;
+    const rideId = req.params.id;
+    const userId = req.user._id;
+
+    try {
+      const ride = await Ride.findById(rideId);
+      if (!ride) return res.status(404).json({ message: "Ride not found." });
+      if (String(ride.driverId) !== String(userId)) {
+        return res.status(403).json({ message: "Only the driver can update location." });
+      }
+      if (!ride.isTrackingLocation) {
+        return res.status(400).json({ message: "Location tracking is not enabled for this ride." });
+      }
+
+      const timestamp = new Date();
+
+      // Update current location
+      ride.currentLocation = {
+        latitude,
+        longitude,
+        timestamp,
+      };
+
+      // Add to location history (keep last 100 points)
+      ride.locationHistory.push({ latitude, longitude, timestamp });
+      if (ride.locationHistory.length > 100) {
+        ride.locationHistory.shift();
+      }
+
+      await ride.save();
+
+      // Emit real-time location update to all passengers
+      global.io.emit("driver_location_updated", {
+        rideId: ride._id,
+        currentLocation: ride.currentLocation,
+        driverId: userId,
+      });
+
+      // Also notify specific passengers on this ride
+      const bookings = await Booking.find({ rideId, status: "confirmed" });
+      bookings.forEach((booking) => {
+        global.io.to(`user_${booking.passengerId}`).emit("driver_location_updated", {
+          rideId: ride._id,
+          currentLocation: ride.currentLocation,
+          driverId: userId,
+        });
+      });
+
+      res.json({ success: true, currentLocation: ride.currentLocation });
+    } catch (err) {
+      console.error("Update location error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
+
+// PATCH /api/rides/:id/location/start — Start location tracking (drivers only)
+router.patch("/:id/location/start", protect, restrictTo("driver"), async (req, res) => {
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (String(ride.driverId) !== String(userId)) {
+      return res.status(403).json({ message: "Only the driver can start location tracking." });
+    }
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Only active rides can be tracked." });
+    }
+
+    ride.isTrackingLocation = true;
+    await ride.save();
+
+    // Notify passengers that location tracking has started
+    global.io.emit("location_tracking_started", {
+      rideId: ride._id,
+      driverId: userId,
+    });
+
+    const bookings = await Booking.find({ rideId, status: "confirmed" });
+    bookings.forEach((booking) => {
+      global.io.to(`user_${booking.passengerId}`).emit("location_tracking_started", {
+        rideId: ride._id,
+        driverId: userId,
+      });
+    });
+
+    res.json({ success: true, isTrackingLocation: true });
+  } catch (err) {
+    console.error("Start location tracking error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/rides/:id/location/stop — Stop location tracking (drivers only)
+router.patch("/:id/location/stop", protect, restrictTo("driver"), async (req, res) => {
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (String(ride.driverId) !== String(userId)) {
+      return res.status(403).json({ message: "Only the driver can stop location tracking." });
+    }
+
+    ride.isTrackingLocation = false;
+    await ride.save();
+
+    // Notify passengers that location tracking has stopped
+    global.io.emit("location_tracking_stopped", {
+      rideId: ride._id,
+      driverId: userId,
+    });
+
+    const bookings = await Booking.find({ rideId, status: "confirmed" });
+    bookings.forEach((booking) => {
+      global.io.to(`user_${booking.passengerId}`).emit("location_tracking_stopped", {
+        rideId: ride._id,
+        driverId: userId,
+      });
+    });
+
+    res.json({ success: true, isTrackingLocation: false });
+  } catch (err) {
+    console.error("Stop location tracking error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/rides/:id/confirm/driver — Driver confirms ride completion
+router.patch("/:id/confirm/driver", protect, restrictTo("driver"), async (req, res) => {
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (String(ride.driverId) !== String(userId)) {
+      return res.status(403).json({ message: "Only the driver can confirm completion." });
+    }
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Ride is not active." });
+    }
+
+    ride.confirmByDriver = true;
+    await ride.save();
+
+    // Check if both have confirmed
+    if (ride.confirmByDriver && ride.confirmByPassenger) {
+      ride.status = "completed";
+      ride.completedAt = new Date();
+      ride.isTrackingLocation = false;
+      await ride.save();
+
+      // Notify both parties that ride is completed
+      global.io.emit("ride_completed", {
+        rideId: ride._id,
+        status: "completed",
+      });
+
+      const bookings = await Booking.find({ rideId, status: "confirmed" });
+      bookings.forEach((booking) => {
+        global.io.to(`user_${booking.passengerId}`).emit("ride_completed", {
+          rideId: ride._id,
+          status: "completed",
+        });
+      });
+      global.io.to(`user_${ride.driverId}`).emit("ride_completed", {
+        rideId: ride._id,
+        status: "completed",
+      });
+    } else {
+      // Notify passenger that driver has confirmed
+      const bookings = await Booking.find({ rideId, status: "confirmed" });
+      bookings.forEach((booking) => {
+        global.io.to(`user_${booking.passengerId}`).emit("driver_confirmed_completion", {
+          rideId: ride._id,
+        });
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      confirmByDriver: true,
+      confirmByPassenger: ride.confirmByPassenger,
+      isCompleted: ride.confirmByDriver && ride.confirmByPassenger
+    });
+  } catch (err) {
+    console.error("Driver confirmation error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/rides/:id/confirm/passenger — Passenger confirms ride completion
+router.patch("/:id/confirm/passenger", protect, async (req, res) => {
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Ride is not active." });
+    }
+
+    // Check if user is a passenger on this ride
+    const booking = await Booking.findOne({ rideId, passengerId: userId, status: "confirmed" });
+    if (!booking) {
+      return res.status(403).json({ message: "You are not a passenger on this ride." });
+    }
+
+    ride.confirmByPassenger = true;
+    await ride.save();
+
+    // Check if both have confirmed
+    if (ride.confirmByDriver && ride.confirmByPassenger) {
+      ride.status = "completed";
+      ride.completedAt = new Date();
+      ride.isTrackingLocation = false;
+      await ride.save();
+
+      // Notify both parties that ride is completed
+      global.io.emit("ride_completed", {
+        rideId: ride._id,
+        status: "completed",
+      });
+
+      const bookings = await Booking.find({ rideId, status: "confirmed" });
+      bookings.forEach((b) => {
+        global.io.to(`user_${b.passengerId}`).emit("ride_completed", {
+          rideId: ride._id,
+          status: "completed",
+        });
+      });
+      global.io.to(`user_${ride.driverId}`).emit("ride_completed", {
+        rideId: ride._id,
+        status: "completed",
+      });
+    } else {
+      // Notify driver that passenger has confirmed
+      global.io.to(`user_${ride.driverId}`).emit("passenger_confirmed_completion", {
+        rideId: ride._id,
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      confirmByDriver: ride.confirmByDriver,
+      confirmByPassenger: true,
+      isCompleted: ride.confirmByDriver && ride.confirmByPassenger
+    });
+  } catch (err) {
+    console.error("Passenger confirmation error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;

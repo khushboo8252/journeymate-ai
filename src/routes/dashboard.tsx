@@ -24,7 +24,10 @@ import {
   User,
   Users,
   X,
+  Wind,
 } from "lucide-react";
+import { RideCard } from "@/components/site/RideCard";
+import { LocationTracker } from "@/components/driver/LocationTracker";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
@@ -77,6 +80,14 @@ function DashboardPage() {
   const [seatsForMap, setSeatsForMap] = useState<DriverSeat[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
   const isDriver = user?.role === "driver";
+
+  // Search functionality for passengers
+  const [searchFrom, setSearchFrom] = useState("");
+  const [searchTo, setSearchTo] = useState("");
+  const [searchDate, setSearchDate] = useState("");
+  const [searchRides, setSearchRides] = useState<ApiRide[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -156,12 +167,35 @@ function DashboardPage() {
       fetchData();
     });
 
+    // Ride completion confirmation events
+    socket.on("driver_confirmed_completion", (data) => {
+      if (!isDriver) {
+        toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
+        fetchData();
+      }
+    });
+
+    socket.on("passenger_confirmed_completion", (data) => {
+      if (isDriver) {
+        toast.success("Passenger has confirmed ride completion.");
+        fetchData();
+      }
+    });
+
+    socket.on("ride_completed", (data) => {
+      toast.success("Ride completed successfully!");
+      fetchData();
+    });
+
     return () => {
       socket.off("driver_approved");
       socket.off("driver_rejected");
       socket.off("booking_created");
       socket.off("booking_cancelled");
       socket.off("ride_cancelled");
+      socket.off("driver_confirmed_completion");
+      socket.off("passenger_confirmed_completion");
+      socket.off("ride_completed");
     };
   }, [user]);
 
@@ -249,78 +283,23 @@ function DashboardPage() {
     }
   };
 
-  const completeRide = async (rideId: string) => {
+  const confirmRide = async (rideId: string) => {
     try {
-      // Create order for remaining 75% payment
-      const orderResponse = await api.post<{ keyId: string; amount: number; currency: string; orderId: string }>(`/api/rides/${rideId}/complete-order`, {});
+      const response = await api.patch<{
+        success: boolean;
+        confirmByDriver: boolean;
+        confirmByPassenger: boolean;
+        isCompleted: boolean;
+      }>(`/api/rides/${rideId}/confirm/driver`);
       
-      // Check if payment system is configured
-      if (!orderResponse.keyId || orderResponse.keyId === "your_razorpay_key_id") {
-        toast.error("Payment system not configured. Please contact admin.");
-        return;
-      }
-      
-      // Load Razorpay script dynamically
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      script.onload = () => {
-        const options = {
-          key: orderResponse.keyId,
-          amount: orderResponse.amount * 100,
-          currency: orderResponse.currency,
-          name: "Ukyro",
-          description: "Complete ride payment (75% remaining)",
-          order_id: orderResponse.orderId,
-          handler: async function (response: any) {
-            try {
-              // Verify payment and complete ride
-              const completeResponse = await api.post<{ success: boolean; ride: any; driverEarning?: number }>(`/api/rides/${rideId}/complete`, {
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-              });
-              if (completeResponse.driverEarning !== undefined) {
-                toast.success(`Ride completed! Driver earning: ₹${completeResponse.driverEarning}`);
-              } else {
-                toast.success("Ride completed successfully!");
-              }
-              fetchData();
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Failed to complete ride");
-            }
-          },
-          prefill: {
-            name: user?.fullName,
-            email: user?.email,
-          },
-          theme: {
-            color: "#6366f1",
-          },
-          modal: {
-            ondismiss: function() {
-              toast.error("Payment cancelled");
-            },
-          },
-        };
-        try {
-          const rzp = new (window as any).Razorpay(options);
-          rzp.open();
-        } catch (error) {
-          toast.error("Failed to initialize payment. Please try again.");
-        }
-      };
-      script.onerror = () => {
-        toast.error("Failed to load payment gateway. Please check your internet connection.");
-      };
-      document.body.appendChild(script);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to complete ride";
-      // If the error is about payment status, provide a more helpful message
-      if (errorMessage.includes("Upfront payment")) {
-        toast.error("Cannot complete ride: Upfront payment not completed by passenger.");
+      if (response.isCompleted) {
+        toast.success("Ride completed successfully!");
       } else {
-        toast.error(errorMessage);
+        toast.success("Ride completion confirmed. Waiting for passenger confirmation.");
       }
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm ride completion");
     }
   };
 
@@ -335,6 +314,22 @@ function DashboardPage() {
     // Mark notification as seen
     await api.post("/api/profile/notification-seen", {});
     setShowApprovalPopup(false);
+  };
+
+  const handleSearch = async () => {
+    setSearchLoading(true);
+    setSearched(true);
+    try {
+      const qs = new URLSearchParams();
+      if (searchFrom.trim()) qs.set("from", searchFrom.trim());
+      if (searchTo.trim()) qs.set("to", searchTo.trim());
+      if (searchDate) qs.set("date", searchDate);
+      const data = await api.get<ApiRide[]>(`/api/rides?${qs.toString()}`);
+      setSearchRides(Array.isArray(data) ? data : []);
+    } catch {
+      setSearchRides([]);
+    }
+    setSearchLoading(false);
   };
 
   if (loading) return null;
@@ -397,9 +392,25 @@ function DashboardPage() {
               </div>
               <p className="text-muted-foreground text-sm mt-0.5">{user.email ?? ""}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />{t("nav.login")}
-            </Button>
+            <div className="flex items-center gap-2">
+              {isDriver && !(user as any).isProfileComplete && (
+                <Link to="/driver-setup">
+                  <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 font-semibold">
+                    <Car className="h-4 w-4 mr-1.5" />Complete Profile
+                  </Button>
+                </Link>
+              )}
+              {isDriver && (user as any).isProfileComplete && (
+                <Link to="/publish">
+                  <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold">
+                    <Car className="h-4 w-4 mr-1.5" />Publish Ride
+                  </Button>
+                </Link>
+              )}
+              <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
+                <LogOut className="h-4 w-4" />{t("nav.login")}
+              </Button>
+            </div>
           </div>
 
           {/* Approval Popup */}
@@ -437,8 +448,11 @@ function DashboardPage() {
             </motion.div>
           )}
 
-          <Tabs defaultValue={isDriver ? "rides" : "bookings"}>
+          <Tabs defaultValue={isDriver ? "rides" : (!isDriver ? "search" : "bookings")}>
             <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">
+              {!isDriver && (
+                <TabsTrigger value="search" className="flex items-center gap-1.5"><Search className="h-4 w-4" />Search Rides</TabsTrigger>
+              )}
               {isDriver && (
                 <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />{t("dashboard.my_rides")} ({myRides.length})</TabsTrigger>
               )}
@@ -448,6 +462,85 @@ function DashboardPage() {
               <TabsTrigger value="bookings" className="flex items-center gap-1.5"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
               <TabsTrigger value="profile" className="flex items-center gap-1.5"><User className="h-4 w-4" />Profile</TabsTrigger>
             </TabsList>
+
+            {/* SEARCH RIDES — passengers only */}
+            {!isDriver && (
+              <TabsContent value="search" className="space-y-4">
+                <div className="glass rounded-2xl p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" />
+                        From
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Departure city"
+                        value={searchFrom}
+                        onChange={e => setSearchFrom(e.target.value)}
+                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" />
+                        To
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Destination city"
+                        value={searchTo}
+                        onChange={e => setSearchTo(e.target.value)}
+                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                        <Calendar className="h-3 w-3" />
+                        Date
+                      </label>
+                      <Input
+                        type="date"
+                        min={new Date().toISOString().split("T")[0]}
+                        value={searchDate}
+                        onChange={e => setSearchDate(e.target.value)}
+                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleSearch} disabled={searchLoading} className="w-full mt-3 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/40 font-semibold">
+                    {searchLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+                    Search Rides
+                  </Button>
+                </div>
+
+                {searched && (
+                  <div className="space-y-4">
+                    {searchRides.length === 0 ? (
+                      <div className="text-center py-16 glass rounded-2xl">
+                        <Search className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                        <p className="text-muted-foreground">No rides found matching your criteria.</p>
+                      </div>
+                    ) : (
+                      searchRides.map((ride, i) => (
+                        <RideCard 
+                          key={ride._id}
+                          id={ride._id}
+                          origin={ride.origin}
+                          destination={ride.destination}
+                          departureAt={ride.departureAt}
+                          arrivalAt={ride.arrivalAt}
+                          seatsAvailable={ride.seatsAvailable}
+                          pricePerSeat={ride.pricePerSeat}
+                          driver={typeof ride.driverId === "object" ? ride.driverId : null}
+                          index={i}
+                        />
+                      ))
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            )}
 
             {/* MY RIDES — drivers only */}
             <TabsContent value="rides" className="space-y-4">
@@ -469,18 +562,19 @@ function DashboardPage() {
                 </div>
               )}
               {myRides.map(ride => (
-                <div key={ride._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <MapPin className="h-4 w-4 text-primary" />{ride.origin}
-                      <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                <div key={ride._id} className="glass rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <MapPin className="h-4 w-4 text-primary" />{ride.origin}
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                      </div>
+                      <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
+                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/seat</span>
+                        <span>{ride.seatsAvailable}/{ride.seatsTotal} seats left</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
-                      <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/seat</span>
-                      <span>{ride.seatsAvailable}/{ride.seatsTotal} seats left</span>
-                    </div>
-                  </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={ride.status === "active" ? "default" : "secondary"} className={ride.status === "active" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
                       {ride.status}
@@ -490,8 +584,8 @@ function DashboardPage() {
                         <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
                           <Users className="h-4 w-4 mr-1" />Seat Map
                         </Button>
-                        <Button size="sm" variant="default" onClick={() => completeRide(ride._id)} className="bg-green-600 hover:bg-green-700">
-                          <Check className="h-4 w-4 mr-1" />Complete
+                        <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700">
+                          <Check className="h-4 w-4 mr-1" />Confirm Complete
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => cancelRide(ride._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="h-4 w-4" />
@@ -499,6 +593,26 @@ function DashboardPage() {
                       </>
                     )}
                   </div>
+                  </div>
+                  {/* Location tracking for active rides */}
+                  {ride.status === "active" && (
+                    <div className="pt-3 border-t border-border/30">
+                      <LocationTracker
+                        rideId={ride._id}
+                        isTracking={ride.isTrackingLocation || false}
+                        onTrackingChange={(isTracking) => {
+                          // Update ride in local state to reflect tracking status
+                          setMyRides(prevRides => 
+                            prevRides.map(r => 
+                              r._id === ride._id 
+                                ? { ...r, isTrackingLocation: isTracking } 
+                                : r
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </TabsContent>
