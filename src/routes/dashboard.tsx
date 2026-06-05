@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { getSocket, joinUserRoom, joinDriverRoom } from "@/lib/socket";
 import {
+  AlertTriangle,
   ArrowRight,
   Calendar,
   Car,
@@ -18,6 +19,7 @@ import {
   MapPin,
   Phone,
   Search,
+  XCircle,
   ShieldCheck,
   Ticket,
   Trash2,
@@ -187,6 +189,64 @@ function DashboardPage() {
       fetchData();
     });
 
+    // Booking transfer notifications
+    socket.on("booking_transferred", (data) => {
+      if (!isDriver) {
+        toast.success(data.message || "Your booking has been transferred to driver's next ride.");
+        fetchData();
+      }
+    });
+
+    socket.on("passengers_transferred", (data) => {
+      if (isDriver) {
+        toast.success(data.message || "Passengers transferred to your next ride.");
+        fetchData();
+      }
+    });
+
+    // Cancellation count and blocking notifications
+    socket.on("cancellation_count_updated", (data) => {
+      if (isDriver) {
+        toast.warning(data.message || `You have cancelled ${data.cancellationCount} ride(s).`);
+        fetchData();
+      }
+    });
+
+    socket.on("driver_blocked", (data) => {
+      if (isDriver) {
+        toast.error(data.message || "Your account has been blocked due to excessive cancellations.");
+        fetchData();
+      }
+    });
+
+    // Deviation charge notifications
+    socket.on("deviation_charge_requested", (data) => {
+      if (!isDriver) {
+        toast.warning(data.message || "Driver has requested extra charge for route deviation.");
+        fetchData();
+      }
+    });
+
+    socket.on("deviation_charge_approved", (data) => {
+      if (isDriver) {
+        toast.success(data.message || "Deviation charge approved by passenger.");
+        fetchData();
+      } else {
+        toast.success(data.message || "Deviation charge has been approved.");
+        fetchData();
+      }
+    });
+
+    socket.on("deviation_charge_rejected", (data) => {
+      if (isDriver) {
+        toast.info(data.message || "Deviation charge rejected by passenger.");
+        fetchData();
+      } else {
+        toast.info(data.message || "Deviation charge request has been rejected.");
+        fetchData();
+      }
+    });
+
     return () => {
       socket.off("driver_approved");
       socket.off("driver_rejected");
@@ -196,6 +256,13 @@ function DashboardPage() {
       socket.off("driver_confirmed_completion");
       socket.off("passenger_confirmed_completion");
       socket.off("ride_completed");
+      socket.off("booking_transferred");
+      socket.off("passengers_transferred");
+      socket.off("cancellation_count_updated");
+      socket.off("driver_blocked");
+      socket.off("deviation_charge_requested");
+      socket.off("deviation_charge_approved");
+      socket.off("deviation_charge_rejected");
     };
   }, [user]);
 
@@ -274,6 +341,12 @@ function DashboardPage() {
   };
 
   const cancelBooking = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel this booking?\n\n⚠️ Warning: Your booking amount will NOT be refunded upon cancellation."
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.patch(`/api/bookings/${id}/cancel`);
       toast.success("Booking cancelled.");
@@ -300,6 +373,22 @@ function DashboardPage() {
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to confirm ride completion");
+    }
+  };
+
+  const requestDeviationCharge = async (rideId: string, distance: number) => {
+    try {
+      const response = await api.post<{
+        success: boolean;
+        deviationDistance: number;
+        extraCharge: number;
+        message: string;
+      }>(`/api/rides/${rideId}/deviation-charge`, { deviationDistance: distance });
+      
+      toast.success(response.message);
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to request deviation charge");
     }
   };
 
@@ -448,6 +537,45 @@ function DashboardPage() {
             </motion.div>
           )}
 
+          {/* Cancellation count warning for drivers */}
+          {isDriver && (user as any).rideCancellationCount > 0 && !(user as any).isBlocked && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-2xl p-4 mb-6 border border-amber-500/30 bg-amber-500/10"
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-700">
+                    You have cancelled {(user as any).rideCancellationCount} ride(s). 
+                    {3 - (user as any).rideCancellationCount > 0 && (
+                      <span className="text-amber-600"> {3 - (user as any).rideCancellationCount} more cancellation(s) will block your account.</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Blocked driver warning */}
+          {isDriver && (user as any).isBlocked && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-2xl p-4 mb-6 border border-red-500/30 bg-red-500/10"
+            >
+              <div className="flex items-center gap-3">
+                <XCircle className="h-5 w-5 text-red-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-700">
+                    Your account has been blocked due to excessive ride cancellations. Please contact support.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           <Tabs defaultValue={isDriver ? "rides" : (!isDriver ? "search" : "bookings")}>
             <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">
               {!isDriver && (
@@ -584,12 +712,52 @@ function DashboardPage() {
                         <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
                           <Users className="h-4 w-4 mr-1" />Seat Map
                         </Button>
+                        {!ride.deviationChargeRequested && (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => {
+                              const distance = prompt("Enter deviation distance in km:");
+                              if (distance && !isNaN(Number(distance)) && Number(distance) > 0) {
+                                requestDeviationCharge(ride._id, Number(distance));
+                              }
+                            }}
+                            className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+                          >
+                            <Wind className="h-4 w-4 mr-1" />Deviation Charge
+                          </Button>
+                        )}
+                        {ride.deviationChargeRequested && !ride.deviationChargeApproved && (
+                          <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+                            Charge Pending
+                          </Badge>
+                        )}
+                        {ride.deviationChargeApproved && (
+                          <Badge variant="default" className="bg-green-500/20 text-green-600 border-green-500/30">
+                            +₹{ride.extraCharge}
+                          </Badge>
+                        )}
                         <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700">
                           <Check className="h-4 w-4 mr-1" />Confirm Complete
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => cancelRide(ride._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {(() => {
+                          const now = new Date();
+                          const departureTime = new Date(ride.departureAt);
+                          const hoursUntilDeparture = (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+                          const canCancel = hoursUntilDeparture >= 1;
+                          return (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => cancelRide(ride._id)}
+                              disabled={!canCancel}
+                              className={`text-destructive hover:text-destructive hover:bg-destructive/10 ${!canCancel ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={!canCancel ? "Ride can only be cancelled at least 1 hour before departure" : ""}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          );
+                        })()}
                       </>
                     )}
                   </div>

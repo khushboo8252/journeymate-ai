@@ -136,23 +136,133 @@ router.patch("/:id/cancel", protect, restrictTo("driver"), async (req, res) => {
       return res.status(400).json({ message: "Only active rides can be cancelled." });
     }
 
+    // Check if driver is blocked
+    const driver = await User.findById(req.user._id);
+    if (driver.isBlocked) {
+      return res.status(403).json({ 
+        message: "Your account has been blocked due to excessive ride cancellations. Please contact support." 
+      });
+    }
+
+    // Check if ride can be cancelled (must be at least 1 hour before departure)
+    const now = new Date();
+    const departureTime = new Date(ride.departureAt);
+    const hoursUntilDeparture = (departureTime - now) / (1000 * 60 * 60);
+    
+    if (hoursUntilDeparture < 1) {
+      return res.status(400).json({ 
+        message: "Ride can only be cancelled at least 1 hour before departure time." 
+      });
+    }
+
     ride.status = "cancelled";
     await ride.save();
 
-    const bookings = await Booking.updateMany(
-      { rideId: ride._id, status: "confirmed" },
-      { status: "cancelled" }
-    );
+    // Get confirmed bookings for this ride
+    const confirmedBookings = await Booking.find({ rideId: ride._id, status: "confirmed" });
+    
+    // Find driver's next available ride (after current ride's departure time)
+    const nextRide = await Ride.findOne({
+      driverId: req.user._id,
+      status: "active",
+      departureAt: { $gt: ride.departureAt }
+    }).sort({ departureAt: 1 });
+
+    if (nextRide && confirmedBookings.length > 0) {
+      // Get driver details for notification
+      const driver = await User.findById(req.user._id);
+      const vehicleNumber = driver?.vehicleNumber || "N/A";
+      const nextDepartureTime = new Date(nextRide.departureAt);
+      const formattedTime = nextDepartureTime.toLocaleTimeString("en-US", { 
+        hour: "2-digit", 
+        minute: "2-digit",
+        hour12: true 
+      });
+
+      // Check if next ride has enough seats for all passengers
+      const totalSeatsNeeded = confirmedBookings.reduce((sum, booking) => sum + booking.seats, 0);
+      
+      if (nextRide.seatsAvailable >= totalSeatsNeeded) {
+        // Transfer passengers to next ride
+        for (const booking of confirmedBookings) {
+          booking.rideId = nextRide._id;
+          await booking.save();
+          
+          // Update next ride seat availability
+          nextRide.seatsAvailable -= booking.seats;
+        }
+        await nextRide.save();
+
+        // Notify passengers about transfer
+        confirmedBookings.forEach((booking) => {
+          global.io.to(`user_${booking.passengerId}`).emit("booking_transferred", {
+            originalRideId: ride._id,
+            newRideId: nextRide._id,
+            newRide: nextRide,
+            vehicleNumber,
+            departureTime: formattedTime,
+            message: `Your booking has been transferred to driver's next ride at ${formattedTime}. Vehicle: ${vehicleNumber}`
+          });
+        });
+
+        // Notify driver about passenger transfer
+        global.io.to(`driver_${req.user._id}`).emit("passengers_transferred", {
+          originalRideId: ride._id,
+          newRideId: nextRide._id,
+          passengerCount: confirmedBookings.length,
+          message: `${confirmedBookings.length} passenger(s) transferred to your next ride at ${formattedTime}`
+        });
+      } else {
+        // Not enough seats - cancel bookings instead
+        await Booking.updateMany(
+          { rideId: ride._id, status: "confirmed" },
+          { status: "cancelled" }
+        );
+
+        // Notify passengers about cancellation (no transfer possible)
+        confirmedBookings.forEach((booking) => {
+          global.io.to(`user_${booking.passengerId}`).emit("ride_cancelled", ride);
+        });
+      }
+    } else {
+      // No next ride available - cancel bookings
+      await Booking.updateMany(
+        { rideId: ride._id, status: "confirmed" },
+        { status: "cancelled" }
+      );
+
+      // Notify passengers about cancellation
+      confirmedBookings.forEach((booking) => {
+        global.io.to(`user_${booking.passengerId}`).emit("ride_cancelled", ride);
+      });
+    }
 
     // Emit real-time event for ride cancellation
     global.io.emit("ride_cancelled", ride);
     global.io.to(`driver_${req.user._id}`).emit("driver_ride_cancelled", ride);
 
-    // Notify passengers who booked this ride
-    const confirmedBookings = await Booking.find({ rideId: ride._id, status: "cancelled" });
-    confirmedBookings.forEach((booking) => {
-      global.io.to(`user_${booking.passengerId}`).emit("ride_cancelled", ride);
-    });
+    // Increment cancellation count and check if driver should be blocked
+    driver.rideCancellationCount = (driver.rideCancellationCount || 0) + 1;
+    
+    if (driver.rideCancellationCount >= 3) {
+      driver.isBlocked = true;
+      await driver.save();
+      
+      // Notify driver about account block
+      global.io.to(`driver_${req.user._id}`).emit("driver_blocked", {
+        message: "Your account has been blocked due to 3 ride cancellations. Please contact support."
+      });
+    } else {
+      await driver.save();
+      
+      // Notify driver about remaining cancellations
+      const remainingCancellations = 3 - driver.rideCancellationCount;
+      global.io.to(`driver_${req.user._id}`).emit("cancellation_count_updated", {
+        cancellationCount: driver.rideCancellationCount,
+        remainingCancellations,
+        message: `You have cancelled ${driver.rideCancellationCount} ride(s). ${remainingCancellations} more cancellation(s) will result in account block.`
+      });
+    }
 
     res.json(ride);
   } catch (err) {
@@ -513,3 +623,156 @@ router.patch("/:id/confirm/passenger", protect, async (req, res) => {
 });
 
 module.exports = router;
+
+// POST /api/rides/:id/deviation-charge — Driver requests extra charge for route deviation
+router.post("/:id/deviation-charge", protect, restrictTo("driver"), async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (String(ride.driverId) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Only the driver can request deviation charge." });
+    }
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Ride is not active." });
+    }
+    if (ride.deviationChargeRequested) {
+      return res.status(400).json({ message: "Deviation charge already requested." });
+    }
+
+    const { deviationDistance } = req.body;
+    if (!deviationDistance || deviationDistance <= 0) {
+      return res.status(400).json({ message: "Valid deviation distance is required." });
+    }
+
+    // Calculate extra charge (₹20 per km)
+    const extraCharge = deviationDistance * 20;
+
+    ride.deviationDistance = deviationDistance;
+    ride.extraCharge = extraCharge;
+    ride.deviationChargeRequested = true;
+    await ride.save();
+
+    // Notify passengers about deviation charge request
+    const bookings = await Booking.find({ rideId: ride._id, status: "confirmed" });
+    bookings.forEach((booking) => {
+      global.io.to(`user_${booking.passengerId}`).emit("deviation_charge_requested", {
+        rideId: ride._id,
+        deviationDistance,
+        extraCharge,
+        message: `Driver has requested ₹${extraCharge} extra charge for ${deviationDistance} km route deviation.`
+      });
+    });
+
+    res.json({
+      success: true,
+      deviationDistance,
+      extraCharge,
+      message: `Deviation charge of ₹${extraCharge} requested for ${deviationDistance} km deviation.`
+    });
+  } catch (err) {
+    console.error("Deviation charge request error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/rides/:id/deviation-charge/approve — Passenger approves deviation charge
+router.post("/:id/deviation-charge/approve", protect, async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Ride is not active." });
+    }
+    if (!ride.deviationChargeRequested) {
+      return res.status(400).json({ message: "No deviation charge requested." });
+    }
+    if (ride.deviationChargeApproved) {
+      return res.status(400).json({ message: "Deviation charge already approved." });
+    }
+
+    // Check if user is a passenger on this ride
+    const booking = await Booking.findOne({ rideId: ride._id, passengerId: req.user._id, status: "confirmed" });
+    if (!booking) {
+      return res.status(403).json({ message: "You are not a passenger on this ride." });
+    }
+
+    ride.deviationChargeApproved = true;
+    await ride.save();
+
+    // Notify driver about approval
+    global.io.to(`user_${ride.driverId}`).emit("deviation_charge_approved", {
+      rideId: ride._id,
+      extraCharge: ride.extraCharge,
+      message: `Passenger approved deviation charge of ₹${ride.extraCharge}.`
+    });
+
+    // Notify other passengers
+    const bookings = await Booking.find({ rideId: ride._id, status: "confirmed" });
+    bookings.forEach((b) => {
+      global.io.to(`user_${b.passengerId}`).emit("deviation_charge_approved", {
+        rideId: ride._id,
+        extraCharge: ride.extraCharge,
+        message: `Deviation charge of ₹${ride.extraCharge} has been approved.`
+      });
+    });
+
+    res.json({
+      success: true,
+      extraCharge: ride.extraCharge,
+      message: "Deviation charge approved successfully."
+    });
+  } catch (err) {
+    console.error("Deviation charge approval error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/rides/:id/deviation-charge/reject — Passenger rejects deviation charge
+router.post("/:id/deviation-charge/reject", protect, async (req, res) => {
+  try {
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+    if (ride.status !== "active") {
+      return res.status(400).json({ message: "Ride is not active." });
+    }
+    if (!ride.deviationChargeRequested) {
+      return res.status(400).json({ message: "No deviation charge requested." });
+    }
+
+    // Check if user is a passenger on this ride
+    const booking = await Booking.findOne({ rideId: ride._id, passengerId: req.user._id, status: "confirmed" });
+    if (!booking) {
+      return res.status(403).json({ message: "You are not a passenger on this ride." });
+    }
+
+    // Reset deviation charge
+    ride.deviationDistance = 0;
+    ride.extraCharge = 0;
+    ride.deviationChargeRequested = false;
+    ride.deviationChargeApproved = false;
+    await ride.save();
+
+    // Notify driver about rejection
+    global.io.to(`user_${ride.driverId}`).emit("deviation_charge_rejected", {
+      rideId: ride._id,
+      message: "Passenger rejected deviation charge request."
+    });
+
+    // Notify other passengers
+    const bookings = await Booking.find({ rideId: ride._id, status: "confirmed" });
+    bookings.forEach((b) => {
+      global.io.to(`user_${b.passengerId}`).emit("deviation_charge_rejected", {
+        rideId: ride._id,
+        message: "Deviation charge request has been rejected."
+      });
+    });
+
+    res.json({
+      success: true,
+      message: "Deviation charge rejected successfully."
+    });
+  } catch (err) {
+    console.error("Deviation charge rejection error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});

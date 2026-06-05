@@ -129,6 +129,36 @@ function RideDetailPage() {
       }
     });
 
+    // Booking transfer notifications
+    socket.on("booking_transferred", (data: any) => {
+      if (data.originalRideId === ride._id && !isDriver) {
+        toast.success(data.message || "Your booking has been transferred to driver's next ride.");
+        fetchRide();
+      }
+    });
+
+    // Deviation charge notifications
+    socket.on("deviation_charge_requested", (data: any) => {
+      if (data.rideId === ride._id && !isDriver) {
+        toast.warning(data.message || "Driver has requested extra charge for route deviation.");
+        fetchRide();
+      }
+    });
+
+    socket.on("deviation_charge_approved", (data: any) => {
+      if (data.rideId === ride._id) {
+        toast.success(data.message || "Deviation charge has been approved.");
+        fetchRide();
+      }
+    });
+
+    socket.on("deviation_charge_rejected", (data: any) => {
+      if (data.rideId === ride._id) {
+        toast.info(data.message || "Deviation charge request has been rejected.");
+        fetchRide();
+      }
+    });
+
     // Initialize location from ride data
     if (ride.currentLocation?.latitude && ride.currentLocation?.longitude) {
       setDriverLocation({
@@ -145,6 +175,10 @@ function RideDetailPage() {
       socket.off("driver_confirmed_completion");
       socket.off("passenger_confirmed_completion");
       socket.off("ride_completed");
+      socket.off("booking_transferred");
+      socket.off("deviation_charge_requested");
+      socket.off("deviation_charge_approved");
+      socket.off("deviation_charge_rejected");
     };
   }, [ride]);
 
@@ -647,6 +681,57 @@ function RideDetailPage() {
                   {/* Ride completion confirmation for passengers */}
                   {alreadyBooked && ride.status === "active" && (
                     <div className="space-y-3 pt-3 border-t border-border/30">
+                      {/* Deviation charge request */}
+                      {ride.deviationChargeRequested && !ride.deviationChargeApproved && (
+                        <div className="space-y-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                          <p className="text-sm font-medium text-amber-700">
+                            Driver requested ₹{ride.extraCharge} extra charge for {ride.deviationDistance} km route deviation.
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await api.post(`/api/rides/${rideId}/deviation-charge/approve`, {});
+                                  toast.success("Deviation charge approved!");
+                                  fetchRide();
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "Failed to approve");
+                                }
+                              }}
+                              className="flex-1 bg-green-600 hover:bg-green-700"
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  await api.post(`/api/rides/${rideId}/deviation-charge/reject`, {});
+                                  toast.success("Deviation charge rejected.");
+                                  fetchRide();
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "Failed to reject");
+                                }
+                              }}
+                              className="flex-1 border-red-500/50 text-red-600 hover:bg-red-500/10"
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Deviation charge approved */}
+                      {ride.deviationChargeApproved && (ride.extraCharge || 0) > 0 && (
+                        <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                          <p className="text-sm font-medium text-green-700">
+                            Extra charge of ₹{ride.extraCharge || 0} approved for route deviation.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="text-center space-y-2">
                         {ride.confirmByDriver && !ride.confirmByPassenger && (
                           <p className="text-sm text-green-600 font-medium">Driver has confirmed ride completion. Please confirm.</p>

@@ -134,6 +134,23 @@ const rideSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Route deviation and extra charges
+    deviationDistance: {
+      type: Number,
+      default: 0,
+    },
+    extraCharge: {
+      type: Number,
+      default: 0,
+    },
+    deviationChargeRequested: {
+      type: Boolean,
+      default: false,
+    },
+    deviationChargeApproved: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
