@@ -430,7 +430,7 @@ function RideDetailPage() {
               )}
 
               {/* ── Route timeline card ── */}
-              <div className="glass rounded-2xl p-6">
+              <div className="glass rounded-2xl p-4 sm:p-6">
                 <div className="flex gap-4">
                   {/* Timeline spine */}
                   <div className="flex flex-col items-center pt-1">
@@ -444,8 +444,8 @@ function RideDetailPage() {
                     {/* Departure stop */}
                     <div>
                       <div className="flex items-baseline gap-3">
-                        <span className="text-lg font-bold tabular-nums w-12 shrink-0">{format(departure, "HH:mm")}</span>
-                        <span className="font-semibold text-base">{ride.origin}</span>
+                        <span className="text-base sm:text-lg font-bold tabular-nums w-12 shrink-0">{format(departure, "HH:mm")}</span>
+                        <span className="font-semibold text-sm sm:text-base">{ride.origin}</span>
                       </div>
                     </div>
 
@@ -460,10 +460,10 @@ function RideDetailPage() {
                     {/* Arrival stop */}
                     <div>
                       <div className="flex items-baseline gap-3">
-                        <span className="text-lg font-bold tabular-nums w-12 shrink-0">
+                        <span className="text-base sm:text-lg font-bold tabular-nums w-12 shrink-0">
                           {arrival ? format(arrival, "HH:mm") : "—"}
                         </span>
-                        <span className="font-semibold text-base">{ride.destination}</span>
+                        <span className="font-semibold text-sm sm:text-base">{ride.destination}</span>
                       </div>
                     </div>
                   </div>
@@ -486,15 +486,15 @@ function RideDetailPage() {
               {/* ── Driver card ── */}
               <div className="glass rounded-2xl overflow-hidden">
                 {/* Driver header row */}
-                <div className="flex items-center gap-4 p-5 hover:bg-muted/10 transition-colors cursor-default">
-                  <Avatar className="h-12 w-12 border-2 border-primary/30 shrink-0">
+                <div className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5 hover:bg-muted/10 transition-colors cursor-default">
+                  <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border-2 border-primary/30 shrink-0">
                     <AvatarImage src={driver?.avatarUrl ?? undefined} />
-                    <AvatarFallback className="text-base bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
+                    <AvatarFallback className="text-sm sm:text-base bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
                       {driverInitials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-base leading-tight">{driver?.fullName ?? "Driver"}</p>
+                    <p className="font-semibold text-sm sm:text-base leading-tight">{driver?.fullName ?? "Driver"}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{t("ride_details.verified_driver")}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -503,7 +503,7 @@ function RideDetailPage() {
                 <Separator />
 
                 {/* Driver details list */}
-                <div className="p-5 space-y-3">
+                <div className="p-4 sm:p-5 space-y-3">
                   {/* Location tracking controls for driver */}
                   {isDriver && ride.status === "active" && (
                     <div className="pt-3 border-t border-border/30">
@@ -651,7 +651,7 @@ function RideDetailPage() {
                           )}
                         </div>
                         {selectedSeats.length > 0 && (
-                          <div className="flex items-baseline gap-0.5 font-bold text-xl">
+                          <div className="flex items-baseline gap-0.5 font-bold text-lg sm:text-xl">
                             <IndianRupee className="h-4 w-4" />
                             {(Number(ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}
                             <span className="text-xs font-normal text-muted-foreground">.00</span>
@@ -663,10 +663,10 @@ function RideDetailPage() {
                       <Button
                         onClick={bookRide}
                         disabled={booking || selectedSeats.length === 0}
-                        className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-11 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
+                        className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-10 sm:h-11 rounded-full text-sm sm:text-base shadow-lg shadow-primary/30 disabled:opacity-40"
                       >
                         {booking
-                          ? <Loader2 className="h-5 w-5 animate-spin" />
+                          ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                           : selectedSeats.length === 0
                           ? t("ride_details.select_seats_to_book")
                           : <><Zap className="h-4 w-4 mr-1.5" />{t("ride_details.book")} {selectedSeats.length} {t("ride_details.seat")}</>}
@@ -685,7 +685,10 @@ function RideDetailPage() {
                       {ride.deviationChargeRequested && !ride.deviationChargeApproved && (
                         <div className="space-y-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                           <p className="text-sm font-medium text-amber-700">
-                            Driver requested ₹{ride.extraCharge} extra charge for {ride.deviationDistance} km route deviation.
+                            {t("ride_details.deviation_charge_requested", { 
+                              extraCharge: ride.extraCharge || 0, 
+                              distance: ride.deviationDistance || 0 
+                            })}
                           </p>
                           <div className="flex gap-2">
                             <Button
@@ -693,7 +696,7 @@ function RideDetailPage() {
                               onClick={async () => {
                                 try {
                                   await api.post(`/api/rides/${rideId}/deviation-charge/approve`, {});
-                                  toast.success("Deviation charge approved!");
+                                  toast.success(t("ride_details.deviation_charge_approved", { extraCharge: ride.extraCharge || 0 }));
                                   fetchRide();
                                 } catch (err) {
                                   toast.error(err instanceof Error ? err.message : "Failed to approve");
@@ -701,7 +704,7 @@ function RideDetailPage() {
                               }}
                               className="flex-1 bg-green-600 hover:bg-green-700"
                             >
-                              Approve
+                              {t("ride_details.approve")}
                             </Button>
                             <Button
                               size="sm"
@@ -717,7 +720,7 @@ function RideDetailPage() {
                               }}
                               className="flex-1 border-red-500/50 text-red-600 hover:bg-red-500/10"
                             >
-                              Reject
+                              {t("ride_details.reject")}
                             </Button>
                           </div>
                         </div>
@@ -727,23 +730,23 @@ function RideDetailPage() {
                       {ride.deviationChargeApproved && (ride.extraCharge || 0) > 0 && (
                         <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
                           <p className="text-sm font-medium text-green-700">
-                            Extra charge of ₹{ride.extraCharge || 0} approved for route deviation.
+                            {t("ride_details.deviation_charge_approved", { extraCharge: ride.extraCharge || 0 })}
                           </p>
                         </div>
                       )}
 
                       <div className="text-center space-y-2">
                         {ride.confirmByDriver && !ride.confirmByPassenger && (
-                          <p className="text-sm text-green-600 font-medium">Driver has confirmed ride completion. Please confirm.</p>
+                          <p className="text-sm text-green-600 font-medium">{t("ride_details.driver_confirmed")}</p>
                         )}
                         {!ride.confirmByDriver && ride.confirmByPassenger && (
-                          <p className="text-sm text-amber-600 font-medium">Waiting for driver to confirm.</p>
+                          <p className="text-sm text-amber-600 font-medium">{t("ride_details.waiting_driver")}</p>
                         )}
                         {ride.confirmByDriver && ride.confirmByPassenger && (
-                          <p className="text-sm text-green-600 font-medium">Ride completed!</p>
+                          <p className="text-sm text-green-600 font-medium">{t("ride_details.ride_completed")}</p>
                         )}
                         {!ride.confirmByDriver && !ride.confirmByPassenger && (
-                          <p className="text-sm text-muted-foreground">Confirm ride completion when done.</p>
+                          <p className="text-sm text-muted-foreground">{t("ride_details.confirm_completion")}</p>
                         )}
                       </div>
                       {!ride.confirmByPassenger && (
@@ -751,7 +754,7 @@ function RideDetailPage() {
                           onClick={async () => {
                             try {
                               await api.patch(`/api/rides/${rideId}/confirm/passenger`);
-                              toast.success("Ride completion confirmed!");
+                              toast.success(t("ride_details.ride_completed"));
                               fetchRide();
                             } catch (err) {
                               toast.error(err instanceof Error ? err.message : "Failed to confirm");
@@ -759,7 +762,7 @@ function RideDetailPage() {
                           }}
                           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
                         >
-                          Confirm Ride Complete
+                          {t("ride_details.confirm_button")}
                         </Button>
                       )}
                     </div>

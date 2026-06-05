@@ -548,10 +548,10 @@ function DashboardPage() {
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-amber-700">
-                    You have cancelled {(user as any).rideCancellationCount} ride(s). 
-                    {3 - (user as any).rideCancellationCount > 0 && (
-                      <span className="text-amber-600"> {3 - (user as any).rideCancellationCount} more cancellation(s) will block your account.</span>
-                    )}
+                    {t("dashboard.cancellation_warning", { 
+                      count: (user as any).rideCancellationCount,
+                      remaining: 3 - (user as any).rideCancellationCount
+                    })}
                   </p>
                 </div>
               </div>
@@ -569,7 +569,7 @@ function DashboardPage() {
                 <XCircle className="h-5 w-5 text-red-600" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-red-700">
-                    Your account has been blocked due to excessive ride cancellations. Please contact support.
+                    {t("dashboard.blocked_warning")}
                   </p>
                 </div>
               </div>
@@ -577,33 +577,33 @@ function DashboardPage() {
           )}
 
           <Tabs defaultValue={isDriver ? "rides" : (!isDriver ? "search" : "bookings")}>
-            <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">
+            <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1 w-full sm:w-auto">
               {!isDriver && (
-                <TabsTrigger value="search" className="flex items-center gap-1.5"><Search className="h-4 w-4" />Search Rides</TabsTrigger>
+                <TabsTrigger value="search" className="flex items-center gap-1.5 text-sm sm:text-base"><Search className="h-4 w-4" />{t("nav.search")}</TabsTrigger>
               )}
               {isDriver && (
-                <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />{t("dashboard.my_rides")} ({myRides.length})</TabsTrigger>
+                <TabsTrigger value="rides" className="flex items-center gap-1.5 text-sm sm:text-base"><Car className="h-4 w-4" />{t("dashboard.my_rides")} ({myRides.length})</TabsTrigger>
               )}
               {isDriver && (
-                <TabsTrigger value="passengers" className="flex items-center gap-1.5"><Users className="h-4 w-4" />Passengers ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
+                <TabsTrigger value="passengers" className="flex items-center gap-1.5 text-sm sm:text-base"><Users className="h-4 w-4" />{t("dashboard.passengers")} ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
               )}
-              <TabsTrigger value="bookings" className="flex items-center gap-1.5"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
-              <TabsTrigger value="profile" className="flex items-center gap-1.5"><User className="h-4 w-4" />Profile</TabsTrigger>
+              <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-sm sm:text-base"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
+              <TabsTrigger value="profile" className="flex items-center gap-1.5 text-sm sm:text-base"><User className="h-4 w-4" />{t("auth.full_name")}</TabsTrigger>
             </TabsList>
 
             {/* SEARCH RIDES — passengers only */}
             {!isDriver && (
               <TabsContent value="search" className="space-y-4">
-                <div className="glass rounded-2xl p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="glass rounded-2xl p-4 sm:p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
                         <MapPin className="h-3 w-3" />
-                        From
+                        {t("search.from")}
                       </label>
                       <Input
                         type="text"
-                        placeholder="Departure city"
+                        placeholder={t("search.from_ph")}
                         value={searchFrom}
                         onChange={e => setSearchFrom(e.target.value)}
                         className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
@@ -612,20 +612,20 @@ function DashboardPage() {
                     <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
                         <MapPin className="h-3 w-3" />
-                        To
+                        {t("search.to")}
                       </label>
                       <Input
                         type="text"
-                        placeholder="Destination city"
+                        placeholder={t("search.to_ph")}
                         value={searchTo}
                         onChange={e => setSearchTo(e.target.value)}
                         className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
                       />
                     </div>
-                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2 sm:col-span-2 lg:col-span-1">
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
                         <Calendar className="h-3 w-3" />
-                        Date
+                        {t("search.date")}
                       </label>
                       <Input
                         type="date"
@@ -636,9 +636,9 @@ function DashboardPage() {
                       />
                     </div>
                   </div>
-                  <Button onClick={handleSearch} disabled={searchLoading} className="w-full mt-3 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/40 font-semibold">
+                  <Button onClick={handleSearch} disabled={searchLoading} className="w-full mt-3 sm:mt-4 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/40 font-semibold h-10 sm:h-11">
                     {searchLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-                    Search Rides
+                    {t("nav.search")}
                   </Button>
                 </div>
 
@@ -647,7 +647,7 @@ function DashboardPage() {
                     {searchRides.length === 0 ? (
                       <div className="text-center py-16 glass rounded-2xl">
                         <Search className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-muted-foreground">No rides found matching your criteria.</p>
+                        <p className="text-muted-foreground">{t("search.no_rides")}</p>
                       </div>
                     ) : (
                       searchRides.map((ride, i) => (
@@ -672,16 +672,16 @@ function DashboardPage() {
 
             {/* MY RIDES — drivers only */}
             <TabsContent value="rides" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-muted-foreground">Rides you're driving</p>
-                <Link to="/publish">
-                  <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <p className="text-sm text-muted-foreground">{t("dashboard.my_rides")}</p>
+                <Link to="/publish" className="w-full sm:w-auto">
+                  <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
                     <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
                   </Button>
                 </Link>
               </div>
               {myRides.length === 0 && (
-                <div className="text-center py-16 glass rounded-2xl">
+                <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Car className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">{t("dashboard.no_rides_desc")}</p>
                   <Link to="/publish" className="mt-4 inline-block">
@@ -693,52 +693,52 @@ function DashboardPage() {
                 <div key={ride._id} className="glass rounded-xl p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 font-semibold">
+                      <div className="flex items-center gap-2 font-semibold text-sm sm:text-base">
                         <MapPin className="h-4 w-4 text-primary" />{ride.origin}
                         <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
                       </div>
-                      <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
-                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/seat</span>
-                        <span>{ride.seatsAvailable}/{ride.seatsTotal} seats left</span>
+                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/{t("ride_details.seat")}</span>
+                        <span>{ride.seatsAvailable}/{ride.seatsTotal} {t("ride_details.seats_available")}</span>
                       </div>
                     </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={ride.status === "active" ? "default" : "secondary"} className={ride.status === "active" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
                       {ride.status}
                     </Badge>
                     {ride.status === "active" && (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
-                          <Users className="h-4 w-4 mr-1" />Seat Map
+                        <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)} className="text-xs sm:text-sm">
+                          <Users className="h-4 w-4 mr-1" />{t("dashboard.seat_map")}
                         </Button>
                         {!ride.deviationChargeRequested && (
                           <Button 
                             size="sm" 
                             variant="outline" 
                             onClick={() => {
-                              const distance = prompt("Enter deviation distance in km:");
+                              const distance = prompt(t("dashboard.enter_deviation_distance"));
                               if (distance && !isNaN(Number(distance)) && Number(distance) > 0) {
                                 requestDeviationCharge(ride._id, Number(distance));
                               }
                             }}
-                            className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+                            className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10 text-xs sm:text-sm"
                           >
-                            <Wind className="h-4 w-4 mr-1" />Deviation Charge
+                            <Wind className="h-4 w-4 mr-1" />{t("ride_details.deviation_charge")}
                           </Button>
                         )}
                         {ride.deviationChargeRequested && !ride.deviationChargeApproved && (
-                          <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
-                            Charge Pending
+                          <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-xs">
+                            {t("ride_details.charge_pending")}
                           </Badge>
                         )}
                         {ride.deviationChargeApproved && (
-                          <Badge variant="default" className="bg-green-500/20 text-green-600 border-green-500/30">
+                          <Badge variant="default" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">
                             +₹{ride.extraCharge}
                           </Badge>
                         )}
-                        <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700">
-                          <Check className="h-4 w-4 mr-1" />Confirm Complete
+                        <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm">
+                          <Check className="h-4 w-4 mr-1" />{t("dashboard.confirm_complete")}
                         </Button>
                         {(() => {
                           const now = new Date();
@@ -788,12 +788,12 @@ function DashboardPage() {
             {/* PASSENGERS — driver view of who booked their rides */}
             {isDriver && (
               <TabsContent value="passengers" className="space-y-4">
-                <p className="text-sm text-muted-foreground">Passengers who booked your rides</p>
+                <p className="text-sm text-muted-foreground">{t("dashboard.passengers")}</p>
                 {driverBookings.length === 0 && (
-                  <div className="text-center py-16 glass rounded-2xl">
+                  <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                     <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                    <p className="text-muted-foreground">No passengers yet.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Passengers will appear here once someone books your ride.</p>
+                    <p className="text-muted-foreground">{t("dashboard.no_rides")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("dashboard.no_rides_desc")}</p>
                   </div>
                 )}
                 {driverBookings.map(booking => {
@@ -855,18 +855,18 @@ function DashboardPage() {
 
             {/* MY BOOKINGS */}
             <TabsContent value="bookings" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-muted-foreground">Rides you've booked as passenger</p>
-                <Link to="/search">
-                  <Button size="sm" variant="outline" className="flex items-center gap-1.5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <p className="text-sm text-muted-foreground">{t("dashboard.my_bookings")}</p>
+                <Link to="/search" className="w-full sm:w-auto">
+                  <Button size="sm" variant="outline" className="w-full sm:w-auto flex items-center gap-1.5">
                     <Search className="h-4 w-4" />{t("search.button")}
                   </Button>
                 </Link>
               </div>
               {myBookings.length === 0 && (
-                <div className="text-center py-16 glass rounded-2xl">
+                <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Ticket className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-muted-foreground">No bookings yet.</p>
+                  <p className="text-muted-foreground">{t("dashboard.no_rides")}</p>
                   <Link to="/search" className="mt-4 inline-block">
                     <Button size="sm" variant="outline">{t("search.button")}</Button>
                   </Link>
@@ -879,16 +879,16 @@ function DashboardPage() {
                   <div key={booking._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1">
                       {ride && (
-                        <div className="flex items-center gap-2 font-semibold">
+                        <div className="flex items-center gap-2 font-semibold text-sm sm:text-base">
                           <MapPin className="h-4 w-4 text-primary" />{ride.origin}
                           <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
                         </div>
                       )}
-                      <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm text-muted-foreground">
                         {ride && (
                           <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
                         )}
-                        <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""} booked</span>
+                        <span>{booking.seats} {t("ride_details.seat")}{booking.seats > 1 ? "s" : ""} booked</span>
                         {driver?.fullName && <span>Driver: {driver.fullName}</span>}
                       </div>
                     </div>
