@@ -60,9 +60,9 @@ function Home() {
               alt="Neon-lit car driving through an Indian city at night"
               width={1920}
               height={1080}
-              className="h-full w-full object-cover opacity-40"
+              className="h-full w-full object-cover opacity-[0.08]"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/80 to-background" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/95 to-background" />
           </div>
 
           <div className="container mx-auto px-4 md:px-6 pt-20 pb-16 md:pt-32 md:pb-24">
