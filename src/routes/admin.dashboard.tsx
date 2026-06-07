@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   UserCheck,
   UserX,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
@@ -22,12 +23,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/dashboard")({
   head: () => ({
     meta: [
-      { title: "Admin Dashboard — RideWave" },
+      { title: "Admin Dashboard — Ukyro" },
     ],
   }),
   component: AdminDashboard,
@@ -112,6 +116,12 @@ function AdminDashboard() {
   const [rides, setRides] = useState<Ride[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<"stats" | "drivers" | "passengers" | "rides" | "bookings">("stats");
+  const [rejectionDialog, setRejectionDialog] = useState<{
+    open: boolean;
+    driverId: string | null;
+    driverName: string | null;
+    reason: string;
+  }>({ open: false, driverId: null, driverName: null, reason: "" });
 
   useEffect(() => {
     const token = localStorage.getItem("kshira_admin_token");
@@ -293,18 +303,34 @@ function AdminDashboard() {
     }
   };
 
-  const handleRejectDriver = async (driverId: string) => {
-    if (!confirm(t("admin.confirm_reject_driver"))) return;
+  const handleRejectDriver = (driverId: string, driverName: string) => {
+    setRejectionDialog({
+      open: true,
+      driverId,
+      driverName,
+      reason: "",
+    });
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!rejectionDialog.driverId) return;
     const token = localStorage.getItem("kshira_admin_token");
     if (!token) return;
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/reject`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${rejectionDialog.driverId}/reject`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rejectionReason: rejectionDialog.reason,
+        }),
       });
       if (!res.ok) throw new Error(t("admin.reject_driver_failed"));
       toast.success(t("admin.driver_rejected"));
+      setRejectionDialog({ open: false, driverId: null, driverName: null, reason: "" });
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("admin.reject_driver_failed"));
@@ -513,7 +539,7 @@ function AdminDashboard() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleRejectDriver(driver._id)}
+                                  onClick={() => handleRejectDriver(driver._id, driver.fullName)}
                                   className="h-7 px-2 text-xs bg-red-50 text-red-700 hover:bg-red-100"
                                 >
                                   {t("admin.drivers.reject")}
@@ -710,6 +736,57 @@ function AdminDashboard() {
         </div>
       </main>
       <Footer />
+
+      {/* Rejection Dialog */}
+      <Dialog open={rejectionDialog.open} onOpenChange={(open) => 
+        setRejectionDialog(prev => ({ ...prev, open }))
+      }>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserX className="h-5 w-5 text-red-600" />
+              Reject Driver Application
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                You are rejecting the driver application for <strong>{rejectionDialog.driverName}</strong>.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rejectionReason">Rejection Reason *</Label>
+              <Textarea
+                id="rejectionReason"
+                placeholder="Please provide a reason for rejecting this driver application..."
+                value={rejectionDialog.reason}
+                onChange={(e) => setRejectionDialog(prev => ({ ...prev, reason: e.target.value }))}
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be shown to the driver to help them understand why their application was rejected.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setRejectionDialog({ open: false, driverId: null, driverName: null, reason: "" })}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRejectSubmit}
+                disabled={!rejectionDialog.reason.trim()}
+                className="flex-1 bg-red-600 hover:bg-red-700"
+              >
+                Reject Driver
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

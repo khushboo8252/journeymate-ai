@@ -13,12 +13,12 @@ export function Footer() {
               <Car className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <div className="font-bold">Ride<span className="text-gradient">Wave</span></div>
+              <div className="font-bold">Uk<span className="text-gradient">yro</span></div>
               <div className="text-xs text-muted-foreground">{t("footer.tagline")}</div>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} RideWave. {t("footer.rights")}
+            © {new Date().getFullYear()} Ukyro. {t("footer.rights")}
           </p>
         </div>
       </div>

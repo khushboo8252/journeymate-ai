@@ -21,8 +21,8 @@ import { useAuth } from "@/hooks/use-auth";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — RideWave" },
-      { name: "description", content: "Sign in or create your RideWave account." },
+      { title: "Sign in — Ukyro" },
+      { name: "description", content: "Sign in or create your Ukyro account." },
     ],
   }),
   component: AuthPage,

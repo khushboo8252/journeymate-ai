@@ -41,7 +41,7 @@ router.post("/avatar", protect, upload.single("avatar"), async (req, res) => {
     const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
     // Upload new avatar to Cloudinary
-    const result = await uploadToCloudinary(base64, "ridewave/avatars");
+    const result = await uploadToCloudinary(base64, "ukyro/avatars");
 
     // Update user with new avatar
     user.avatarUrl = result.url;
@@ -92,7 +92,7 @@ router.post("/document", protect, upload.single("document"), async (req, res) =>
     const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
     // Upload document to Cloudinary
-    const result = await uploadToCloudinary(base64, `ridewave/documents/${type}`);
+    const result = await uploadToCloudinary(base64, `ukyro/documents/${type}`);
 
     // Update user with new document
     const urlKey = sideKey + "Url";

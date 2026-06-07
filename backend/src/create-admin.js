@@ -9,7 +9,7 @@ async function createAdmin() {
     console.log("✅ Connected to MongoDB");
 
     // Check if admin already exists
-    const existingAdmin = await User.findOne({ email: "admin@ridewave.com" });
+    const existingAdmin = await User.findOne({ email: "admin@ukyro.com" });
     if (existingAdmin) {
       console.log("⚠️ Admin already exists. Updating isAdmin field and password...");
       existingAdmin.isAdmin = true;
@@ -22,7 +22,7 @@ async function createAdmin() {
     // Create new admin (password will be hashed by User model pre-save hook)
     const admin = await User.create({
       fullName: "Admin User",
-      email: "admin@ridewave.com",
+      email: "admin@ukyro.com",
       password: "admin123",
       isAdmin: true,
       role: "driver", // Admin can also be a driver if needed
@@ -30,7 +30,7 @@ async function createAdmin() {
     });
 
     console.log("✅ Admin created successfully!");
-    console.log("Email: admin@ridewave.com");
+    console.log("Email: admin@ukyro.com");
     console.log("Password: admin123");
     console.log("⚠️ Please change the password after first login!");
     

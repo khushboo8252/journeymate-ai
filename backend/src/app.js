@@ -169,7 +169,7 @@ mongoose
     });
 
     httpServer.listen(PORT, () => {
-      console.log(`🚀 RideWave API running on http://localhost:${PORT}`);
+      console.log(`🚀 Ukyro API running on http://localhost:${PORT}`);
       console.log(`🔌 WebSocket server ready`);
     });
 

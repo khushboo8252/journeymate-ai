@@ -30,7 +30,7 @@ import { SeatPicker, type Seat } from "@/components/seat-picker/SeatPicker";
 export const Route = createFileRoute("/rides/$rideId")({
   head: () => ({
     meta: [
-      { title: "Ride details — RideWave" },
+      { title: "Ride details — Ukyro" },
     ],
   }),
   component: RideDetailPage,
@@ -172,22 +172,71 @@ function RideDetailPage() {
           return;
         }
         
-        // TEST MODE: Direct booking confirmation without Razorpay
-        try {
-          await api.post("/api/bookings/test-confirm", {
-            bookingId: bookingResponse.booking._id,
-          });
-          toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
-          setAlreadyBooked(true);
-          setSelectedSeats([]);
-          fetchRide();
-          fetchSeats();
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
-          // Release the locked seats on error
+        // Load Razorpay script dynamically
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.async = true;
+        script.onload = () => {
+          const options = {
+            key: paymentOrder.keyId,
+            amount: paymentOrder.amount * 100,
+            currency: paymentOrder.currency,
+            name: "Ukyro",
+            description: `Booking for ${selectedSeats.length} seat(s)`,
+            order_id: paymentOrder.orderId,
+            handler: async function (response: any) {
+              try {
+                // Verify payment and confirm booking
+                await api.post("/api/bookings/confirm", {
+                  bookingId: bookingResponse.booking._id,
+                  paymentId: response.razorpay_payment_id,
+                  signature: response.razorpay_signature,
+                });
+                toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
+                setAlreadyBooked(true);
+                setSelectedSeats([]);
+                fetchRide();
+                fetchSeats();
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
+                // Release the locked seats on error
+                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+                fetchSeats();
+              }
+            },
+            prefill: {
+              name: user.fullName,
+              email: user.email,
+            },
+            theme: {
+              color: "#6366f1",
+            },
+            modal: {
+              ondismiss: function() {
+                toast.error("Payment cancelled");
+                // Release the locked seats
+                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+                fetchSeats();
+              },
+            },
+          };
+          try {
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+          } catch (error) {
+            toast.error("Failed to initialize payment. Please try again.");
+            // Release the locked seats
+            api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
+            fetchSeats();
+          }
+        };
+        script.onerror = () => {
+          toast.error("Failed to load payment gateway. Please check your internet connection.");
+          // Release the locked seats
           api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
           fetchSeats();
-        }
+        };
+        document.body.appendChild(script);
       } else {
         toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
         setAlreadyBooked(true);

@@ -20,7 +20,7 @@ import { api } from "@/lib/api";
 export const Route = createFileRoute("/publish")({
   head: () => ({
     meta: [
-      { title: "Publish a ride — RideWave" },
+      { title: "Publish a ride — Ukyro" },
       { name: "description", content: "Offer a seat in your car and travel for less." },
     ],
   }),
@@ -33,7 +33,7 @@ const schema = z.object({
   date: z.string().min(1),
   time: z.string().min(1),
   arrivalTime: z.string().optional(),
-  vehicleType: z.string().min(1),
+  vehicleSeats: z.string().min(1),
   price: z.string().refine(v => Number(v) > 0),
   description: z.string().optional(),
 });
@@ -56,7 +56,7 @@ function PublishPage() {
 
   const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { vehicleType: "sedan" },
+    defaultValues: { vehicleSeats: "5" },
   });
 
   const priceValue = useWatch({ control, name: "price" });
@@ -71,7 +71,8 @@ function PublishPage() {
         destination: values.destination,
         departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
         arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
-        vehicleType: values.vehicleType,
+        seatsTotal: Number(values.vehicleSeats),
+        seatsAvailable: Number(values.vehicleSeats),
         pricePerSeat: Number(values.price),
         description: values.description || null,
       });
@@ -94,6 +95,35 @@ function PublishPage() {
             <h2 className="text-2xl font-bold mb-2">{t("auth.signin")}</h2>
             <p className="text-muted-foreground mb-6">You need to be signed in to publish a ride.</p>
             <Link to="/auth"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">{t("auth.signin")}</Button></Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (user.role === "driver" && !user.isApproved) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center px-4 py-24">
+          <div className="glass rounded-2xl p-10 text-center max-w-md w-full">
+            <Lock className="h-10 w-10 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Driver Approval Required</h2>
+            <p className="text-muted-foreground mb-6">
+              Your driver account is pending approval from the admin. You can publish rides once your account is approved.
+            </p>
+            {user.rejectionReason && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm font-medium text-red-800 mb-1">Rejection Reason:</p>
+                <p className="text-sm text-red-600">{user.rejectionReason}</p>
+              </div>
+            )}
+            <Link to="/dashboard">
+              <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
+                Go to Dashboard
+              </Button>
+            </Link>
           </div>
         </main>
         <Footer />
@@ -143,18 +173,16 @@ function PublishPage() {
                 <Input type="time" {...register("arrivalTime")} />
               </div>
               <div className="space-y-1.5">
-                <Label>{t("driver_setup.vehicle_type")}</Label>
-                <Select defaultValue="sedan" onValueChange={v => setValue("vehicleType", v)}>
+                <Label>Vehicle Seats</Label>
+                <Select defaultValue="5" onValueChange={v => setValue("vehicleSeats", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="hatchback">Hatchback (5 seats)</SelectItem>
-                    <SelectItem value="sedan">Sedan (5 seats)</SelectItem>
-                    <SelectItem value="suv">SUV (7 seats)</SelectItem>
-                    <SelectItem value="mpv">MPV (7 seats)</SelectItem>
-                    <SelectItem value="van">Van (10 seats)</SelectItem>
+                    {[4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                      <SelectItem key={n} value={String(n)}>{n} seats</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                {errors.vehicleType && <p className="text-xs text-destructive">{t("driver_setup.vehicle_type")}</p>}
+                {errors.vehicleSeats && <p className="text-xs text-destructive">Vehicle seats are required</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>{t("publish.price")} <span className="text-muted-foreground text-xs">(your fare per seat)</span></Label>

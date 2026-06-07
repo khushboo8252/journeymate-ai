@@ -91,7 +91,7 @@ function Home() {
                 <Link to="/auth">
                   <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-[var(--shadow-glow)] font-semibold text-base h-12 px-8">
                     <Users className="h-5 w-5 mr-2" />
-                    Become a Passenger
+                    Become a Driver
                   </Button>
                 </Link>
                 <Link to="/auth">

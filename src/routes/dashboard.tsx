@@ -48,7 +48,7 @@ import { DriverSeatMap, type Seat as DriverSeat } from "@/components/driver/Driv
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard — RideWave" },
+      { title: "Dashboard — Ukyro" },
       { name: "description", content: "Manage your rides and bookings." },
     ],
   }),

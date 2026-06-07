@@ -11,7 +11,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const uploadToCloudinary = async (file, folder = "ridewave") => {
+const uploadToCloudinary = async (file, folder = "ukyro") => {
   try {
     const result = await cloudinary.uploader.upload(file, {
       folder,
