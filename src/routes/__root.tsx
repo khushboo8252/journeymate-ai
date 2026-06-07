@@ -39,9 +39,13 @@ export const Route = createRootRoute({
       { name: "description", content: "Find affordable, trusted carpool rides across India. AI-powered matching, verified drivers, and transparent prices." },
       { name: "author", content: "Ukyro" },
       { property: "og:title", content: "Ukyro — AI carpooling across India" },
-      { property: "og:description", content: "Find affordable, trusted carpool rides across India." },
+      { property: "og:description", content: "Find affordable, trusted carpool rides across India. AI-powered matching, verified drivers, and transparent prices." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Ukyro — AI carpooling across India" },
+      { name: "twitter:description", content: "Find affordable, trusted carpool rides across India. AI-powered matching, verified drivers, and transparent prices." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ac3911e9-447f-472a-a210-cf55e0bc111e/id-preview-30be2874--5aebb87d-d3b8-449f-9368-c57312a6a3d4.lovable.app-1780659251042.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ac3911e9-447f-472a-a210-cf55e0bc111e/id-preview-30be2874--5aebb87d-d3b8-449f-9368-c57312a6a3d4.lovable.app-1780659251042.png" },
     ],
     links: [
       {
@@ -52,7 +56,7 @@ export const Route = createRootRoute({
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap",
       },
     ],
   }),

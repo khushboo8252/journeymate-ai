@@ -55,6 +55,7 @@ export interface ApiUser {
   hasSeenApprovalNotification?: boolean;
   createdAt: string;
   updatedAt?: string;
+  rideCancellationCount?: number;
 }
 
 export interface ApiRide {
@@ -74,6 +75,27 @@ export interface ApiRide {
   vehicleType?: "hatchback" | "sedan" | "suv" | "mpv" | "van";
   status: "active" | "completed" | "cancelled";
   createdAt: string;
+  // Live location tracking fields
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+  } | null;
+  locationHistory?: Array<{
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+  }>;
+  isTrackingLocation?: boolean;
+  // Ride completion confirmation fields
+  confirmByDriver?: boolean;
+  confirmByPassenger?: boolean;
+  completedAt?: string | null;
+  // Route deviation and extra charges
+  deviationDistance?: number;
+  extraCharge?: number;
+  deviationChargeRequested?: boolean;
+  deviationChargeApproved?: boolean;
 }
 
 export interface ApiBooking {

@@ -124,6 +124,11 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    // Ride cancellation tracking
+    rideCancellationCount: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

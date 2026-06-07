@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { getSocket, joinUserRoom, joinDriverRoom, joinRideRoom, emitLocation } from "@/lib/socket";
 import { registerForPushNotifications, onForegroundMessage } from "@/lib/firebase";
 import {
+  AlertTriangle,
   ArrowRight,
   Calendar,
   Car,
@@ -21,6 +22,7 @@ import {
   Phone,
   Radio,
   Search,
+  XCircle,
   ShieldCheck,
   Square,
   Ticket,
@@ -28,7 +30,10 @@ import {
   User,
   Users,
   X,
+  Wind,
 } from "lucide-react";
+import { RideCard } from "@/components/site/RideCard";
+import { LocationTracker } from "@/components/driver/LocationTracker";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
@@ -83,6 +88,14 @@ function DashboardPage() {
   const [trackingRideId, setTrackingRideId] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const isDriver = user?.role === "driver";
+
+  // Search functionality for passengers
+  const [searchFrom, setSearchFrom] = useState("");
+  const [searchTo, setSearchTo] = useState("");
+  const [searchDate, setSearchDate] = useState("");
+  const [searchRides, setSearchRides] = useState<ApiRide[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -162,6 +175,84 @@ function DashboardPage() {
       fetchData();
     });
 
+    // Ride completion confirmation events
+    socket.on("driver_confirmed_completion", (data) => {
+      if (!isDriver) {
+        toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
+        fetchData();
+      }
+    });
+
+    socket.on("passenger_confirmed_completion", (data) => {
+      if (isDriver) {
+        toast.success("Passenger has confirmed ride completion.");
+        fetchData();
+      }
+    });
+
+    socket.on("ride_completed", (data) => {
+      toast.success("Ride completed successfully!");
+      fetchData();
+    });
+
+    // Booking transfer notifications
+    socket.on("booking_transferred", (data) => {
+      if (!isDriver) {
+        toast.success(data.message || "Your booking has been transferred to driver's next ride.");
+        fetchData();
+      }
+    });
+
+    socket.on("passengers_transferred", (data) => {
+      if (isDriver) {
+        toast.success(data.message || "Passengers transferred to your next ride.");
+        fetchData();
+      }
+    });
+
+    // Cancellation count and blocking notifications
+    socket.on("cancellation_count_updated", (data) => {
+      if (isDriver) {
+        toast.warning(data.message || `You have cancelled ${data.cancellationCount} ride(s).`);
+        fetchData();
+      }
+    });
+
+    socket.on("driver_blocked", (data) => {
+      if (isDriver) {
+        toast.error(data.message || "Your account has been blocked due to excessive cancellations.");
+        fetchData();
+      }
+    });
+
+    // Deviation charge notifications
+    socket.on("deviation_charge_requested", (data) => {
+      if (!isDriver) {
+        toast.warning(data.message || "Driver has requested extra charge for route deviation.");
+        fetchData();
+      }
+    });
+
+    socket.on("deviation_charge_approved", (data) => {
+      if (isDriver) {
+        toast.success(data.message || "Deviation charge approved by passenger.");
+        fetchData();
+      } else {
+        toast.success(data.message || "Deviation charge has been approved.");
+        fetchData();
+      }
+    });
+
+    socket.on("deviation_charge_rejected", (data) => {
+      if (isDriver) {
+        toast.info(data.message || "Deviation charge rejected by passenger.");
+        fetchData();
+      } else {
+        toast.info(data.message || "Deviation charge request has been rejected.");
+        fetchData();
+      }
+    });
+
     // Register for push notifications (best-effort; no-op if FCM not configured)
     registerForPushNotifications();
 
@@ -178,6 +269,16 @@ function DashboardPage() {
       socket.off("booking_created");
       socket.off("booking_cancelled");
       socket.off("ride_cancelled");
+      socket.off("driver_confirmed_completion");
+      socket.off("passenger_confirmed_completion");
+      socket.off("ride_completed");
+      socket.off("booking_transferred");
+      socket.off("passengers_transferred");
+      socket.off("cancellation_count_updated");
+      socket.off("driver_blocked");
+      socket.off("deviation_charge_requested");
+      socket.off("deviation_charge_approved");
+      socket.off("deviation_charge_rejected");
       unsubscribeFcm();
     };
   }, [user]);
@@ -257,6 +358,12 @@ function DashboardPage() {
   };
 
   const cancelBooking = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel this booking?\n\n⚠️ Warning: Your booking amount will NOT be refunded upon cancellation."
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await api.patch(`/api/bookings/${id}/cancel`);
       toast.success("Booking cancelled.");
@@ -266,8 +373,37 @@ function DashboardPage() {
     }
   };
 
-  const completeRide = async (rideId: string) => {
+  const confirmRide = async (rideId: string) => {
     try {
+      const response = await api.patch<{
+        success: boolean;
+        confirmByDriver: boolean;
+        confirmByPassenger: boolean;
+        isCompleted: boolean;
+      }>(`/api/rides/${rideId}/confirm/driver`);
+      
+      if (response.isCompleted) {
+        toast.success("Ride completed successfully!");
+      } else {
+        toast.success("Ride completion confirmed. Waiting for passenger confirmation.");
+      }
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm ride completion");
+    }
+  };
+
+  const requestDeviationCharge = async (rideId: string, distance: number) => {
+    try {
+      const response = await api.post<{
+        success: boolean;
+        deviationDistance: number;
+        extraCharge: number;
+        message: string;
+      }>(`/api/rides/${rideId}/deviation-charge`, { deviationDistance: distance });
+      
+      toast.success(response.message);
+      fetchData();
       // TEST MODE: Direct ride completion without Razorpay
       const completeResponse = await api.post<{ success: boolean; ride: any; driverEarning?: number }>(`/api/rides/${rideId}/test-complete`, {});
       if (completeResponse.driverEarning !== undefined) {
@@ -277,13 +413,7 @@ function DashboardPage() {
       }
       fetchData();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to complete ride";
-      // If the error is about payment status, provide a more helpful message
-      if (errorMessage.includes("Upfront payment")) {
-        toast.error("Cannot complete ride: Upfront payment not completed by passenger.");
-      } else {
-        toast.error(errorMessage);
-      }
+      toast.error(err instanceof Error ? err.message : "Failed to request deviation charge");
     }
   };
 
@@ -360,6 +490,22 @@ function DashboardPage() {
     setShowApprovalPopup(false);
   };
 
+  const handleSearch = async () => {
+    setSearchLoading(true);
+    setSearched(true);
+    try {
+      const qs = new URLSearchParams();
+      if (searchFrom.trim()) qs.set("from", searchFrom.trim());
+      if (searchTo.trim()) qs.set("to", searchTo.trim());
+      if (searchDate) qs.set("date", searchDate);
+      const data = await api.get<ApiRide[]>(`/api/rides?${qs.toString()}`);
+      setSearchRides(Array.isArray(data) ? data : []);
+    } catch {
+      setSearchRides([]);
+    }
+    setSearchLoading(false);
+  };
+
   if (loading) return null;
 
   if (!user) {
@@ -420,9 +566,25 @@ function DashboardPage() {
               </div>
               <p className="text-muted-foreground text-sm mt-0.5">{user.email ?? ""}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />{t("nav.login")}
-            </Button>
+            <div className="flex items-center gap-2">
+              {isDriver && !(user as any).isProfileComplete && (
+                <Link to="/driver-setup">
+                  <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 font-semibold">
+                    <Car className="h-4 w-4 mr-1.5" />Complete Profile
+                  </Button>
+                </Link>
+              )}
+              {isDriver && (user as any).isProfileComplete && (
+                <Link to="/publish">
+                  <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold">
+                    <Car className="h-4 w-4 mr-1.5" />Publish Ride
+                  </Button>
+                </Link>
+              )}
+              <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
+                <LogOut className="h-4 w-4" />{t("nav.login")}
+              </Button>
+            </div>
           </div>
 
           {/* Approval Popup */}
@@ -460,30 +622,151 @@ function DashboardPage() {
             </motion.div>
           )}
 
-          <Tabs defaultValue={isDriver ? "rides" : "bookings"}>
-            <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1">
-              {isDriver && (
-                <TabsTrigger value="rides" className="flex items-center gap-1.5"><Car className="h-4 w-4" />{t("dashboard.my_rides")} ({myRides.length})</TabsTrigger>
+          {/* Cancellation count warning for drivers */}
+          {isDriver && (user as any).rideCancellationCount > 0 && !(user as any).isBlocked && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-2xl p-4 mb-6 border border-amber-500/30 bg-amber-500/10"
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-700">
+                    {t("dashboard.cancellation_warning", { 
+                      count: (user as any).rideCancellationCount,
+                      remaining: 3 - (user as any).rideCancellationCount
+                    })}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Blocked driver warning */}
+          {isDriver && (user as any).isBlocked && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass rounded-2xl p-4 mb-6 border border-red-500/30 bg-red-500/10"
+            >
+              <div className="flex items-center gap-3">
+                <XCircle className="h-5 w-5 text-red-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-700">
+                    {t("dashboard.blocked_warning")}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          <Tabs defaultValue={isDriver ? "rides" : (!isDriver ? "search" : "bookings")}>
+            <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1 w-full sm:w-auto">
+              {!isDriver && (
+                <TabsTrigger value="search" className="flex items-center gap-1.5 text-sm sm:text-base"><Search className="h-4 w-4" />{t("nav.search")}</TabsTrigger>
               )}
               {isDriver && (
-                <TabsTrigger value="passengers" className="flex items-center gap-1.5"><Users className="h-4 w-4" />Passengers ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
+                <TabsTrigger value="rides" className="flex items-center gap-1.5 text-sm sm:text-base"><Car className="h-4 w-4" />{t("dashboard.my_rides")} ({myRides.length})</TabsTrigger>
               )}
-              <TabsTrigger value="bookings" className="flex items-center gap-1.5"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
-              <TabsTrigger value="profile" className="flex items-center gap-1.5"><User className="h-4 w-4" />Profile</TabsTrigger>
+              {isDriver && (
+                <TabsTrigger value="passengers" className="flex items-center gap-1.5 text-sm sm:text-base"><Users className="h-4 w-4" />{t("dashboard.passengers")} ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
+              )}
+              <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-sm sm:text-base"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
+              <TabsTrigger value="profile" className="flex items-center gap-1.5 text-sm sm:text-base"><User className="h-4 w-4" />{t("auth.full_name")}</TabsTrigger>
             </TabsList>
+
+            {/* SEARCH RIDES — passengers only */}
+            {!isDriver && (
+              <TabsContent value="search" className="space-y-4">
+                <div className="glass rounded-2xl p-4 sm:p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" />
+                        {t("search.from")}
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder={t("search.from_ph")}
+                        value={searchFrom}
+                        onChange={e => setSearchFrom(e.target.value)}
+                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" />
+                        {t("search.to")}
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder={t("search.to_ph")}
+                        value={searchTo}
+                        onChange={e => setSearchTo(e.target.value)}
+                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2 sm:col-span-2 lg:col-span-1">
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                        <Calendar className="h-3 w-3" />
+                        {t("search.date")}
+                      </label>
+                      <Input
+                        type="date"
+                        min={new Date().toISOString().split("T")[0]}
+                        value={searchDate}
+                        onChange={e => setSearchDate(e.target.value)}
+                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleSearch} disabled={searchLoading} className="w-full mt-3 sm:mt-4 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/40 font-semibold h-10 sm:h-11">
+                    {searchLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+                    {t("nav.search")}
+                  </Button>
+                </div>
+
+                {searched && (
+                  <div className="space-y-4">
+                    {searchRides.length === 0 ? (
+                      <div className="text-center py-16 glass rounded-2xl">
+                        <Search className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                        <p className="text-muted-foreground">{t("search.no_rides")}</p>
+                      </div>
+                    ) : (
+                      searchRides.map((ride, i) => (
+                        <RideCard 
+                          key={ride._id}
+                          id={ride._id}
+                          origin={ride.origin}
+                          destination={ride.destination}
+                          departureAt={ride.departureAt}
+                          arrivalAt={ride.arrivalAt}
+                          seatsAvailable={ride.seatsAvailable}
+                          pricePerSeat={ride.pricePerSeat}
+                          driver={typeof ride.driverId === "object" ? ride.driverId : null}
+                          index={i}
+                        />
+                      ))
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            )}
 
             {/* MY RIDES — drivers only */}
             <TabsContent value="rides" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-muted-foreground">Rides you're driving</p>
-                <Link to="/publish">
-                  <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <p className="text-sm text-muted-foreground">{t("dashboard.my_rides")}</p>
+                <Link to="/publish" className="w-full sm:w-auto">
+                  <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
                     <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
                   </Button>
                 </Link>
               </div>
               {myRides.length === 0 && (
-                <div className="text-center py-16 glass rounded-2xl">
+                <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Car className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">{t("dashboard.no_rides_desc")}</p>
                   <Link to="/publish" className="mt-4 inline-block">
@@ -492,26 +775,55 @@ function DashboardPage() {
                 </div>
               )}
               {myRides.map(ride => (
-                <div key={ride._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <MapPin className="h-4 w-4 text-primary" />{ride.origin}
-                      <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                <div key={ride._id} className="glass rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 font-semibold text-sm sm:text-base">
+                        <MapPin className="h-4 w-4 text-primary" />{ride.origin}
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                      </div>
+                      <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
+                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/{t("ride_details.seat")}</span>
+                        <span>{ride.seatsAvailable}/{ride.seatsTotal} {t("ride_details.seats_available")}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
-                      <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/seat</span>
-                      <span>{ride.seatsAvailable}/{ride.seatsTotal} seats left</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={ride.status === "active" ? "default" : "secondary"} className={ride.status === "active" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
                       {ride.status}
                     </Badge>
                     {ride.status === "active" && (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)}>
-                          <Users className="h-4 w-4 mr-1" />Seat Map
+                        <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)} className="text-xs sm:text-sm">
+                          <Users className="h-4 w-4 mr-1" />{t("dashboard.seat_map")}
+                        </Button>
+                        {!ride.deviationChargeRequested && (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => {
+                              const distance = prompt(t("dashboard.enter_deviation_distance"));
+                              if (distance && !isNaN(Number(distance)) && Number(distance) > 0) {
+                                requestDeviationCharge(ride._id, Number(distance));
+                              }
+                            }}
+                            className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10 text-xs sm:text-sm"
+                          >
+                            <Wind className="h-4 w-4 mr-1" />{t("ride_details.deviation_charge")}
+                          </Button>
+                        )}
+                        {ride.deviationChargeRequested && !ride.deviationChargeApproved && (
+                          <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-xs">
+                            {t("ride_details.charge_pending")}
+                          </Badge>
+                        )}
+                        {ride.deviationChargeApproved && (
+                          <Badge variant="default" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">
+                            +₹{ride.extraCharge}
+                          </Badge>
+                        )}
+                        <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm">
+                          <Check className="h-4 w-4 mr-1" />{t("dashboard.confirm_complete")}
                         </Button>
                         {trackingRideId === ride._id ? (
                           <Button size="sm" variant="default" onClick={() => stopRideTracking(ride._id)} className="bg-red-600 hover:bg-red-700">
@@ -525,12 +837,47 @@ function DashboardPage() {
                         <Button size="sm" variant="default" onClick={() => completeRide(ride._id)} className="bg-green-600 hover:bg-green-700">
                           <Check className="h-4 w-4 mr-1" />Complete
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => cancelRide(ride._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {(() => {
+                          const now = new Date();
+                          const departureTime = new Date(ride.departureAt);
+                          const hoursUntilDeparture = (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+                          const canCancel = hoursUntilDeparture >= 1;
+                          return (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => cancelRide(ride._id)}
+                              disabled={!canCancel}
+                              className={`text-destructive hover:text-destructive hover:bg-destructive/10 ${!canCancel ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={!canCancel ? "Ride can only be cancelled at least 1 hour before departure" : ""}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
+                  </div>
+                  {/* Location tracking for active rides */}
+                  {ride.status === "active" && (
+                    <div className="pt-3 border-t border-border/30">
+                      <LocationTracker
+                        rideId={ride._id}
+                        isTracking={ride.isTrackingLocation || false}
+                        onTrackingChange={(isTracking) => {
+                          // Update ride in local state to reflect tracking status
+                          setMyRides(prevRides => 
+                            prevRides.map(r => 
+                              r._id === ride._id 
+                                ? { ...r, isTrackingLocation: isTracking } 
+                                : r
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </TabsContent>
@@ -538,12 +885,12 @@ function DashboardPage() {
             {/* PASSENGERS — driver view of who booked their rides */}
             {isDriver && (
               <TabsContent value="passengers" className="space-y-4">
-                <p className="text-sm text-muted-foreground">Passengers who booked your rides</p>
+                <p className="text-sm text-muted-foreground">{t("dashboard.passengers")}</p>
                 {driverBookings.length === 0 && (
-                  <div className="text-center py-16 glass rounded-2xl">
+                  <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                     <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                    <p className="text-muted-foreground">No passengers yet.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Passengers will appear here once someone books your ride.</p>
+                    <p className="text-muted-foreground">{t("dashboard.no_rides")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("dashboard.no_rides_desc")}</p>
                   </div>
                 )}
                 {driverBookings.map(booking => {
@@ -605,18 +952,18 @@ function DashboardPage() {
 
             {/* MY BOOKINGS */}
             <TabsContent value="bookings" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-muted-foreground">Rides you've booked as passenger</p>
-                <Link to="/search">
-                  <Button size="sm" variant="outline" className="flex items-center gap-1.5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <p className="text-sm text-muted-foreground">{t("dashboard.my_bookings")}</p>
+                <Link to="/search" className="w-full sm:w-auto">
+                  <Button size="sm" variant="outline" className="w-full sm:w-auto flex items-center gap-1.5">
                     <Search className="h-4 w-4" />{t("search.button")}
                   </Button>
                 </Link>
               </div>
               {myBookings.length === 0 && (
-                <div className="text-center py-16 glass rounded-2xl">
+                <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Ticket className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-muted-foreground">No bookings yet.</p>
+                  <p className="text-muted-foreground">{t("dashboard.no_rides")}</p>
                   <Link to="/search" className="mt-4 inline-block">
                     <Button size="sm" variant="outline">{t("search.button")}</Button>
                   </Link>
@@ -629,16 +976,16 @@ function DashboardPage() {
                   <div key={booking._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1">
                       {ride && (
-                        <div className="flex items-center gap-2 font-semibold">
+                        <div className="flex items-center gap-2 font-semibold text-sm sm:text-base">
                           <MapPin className="h-4 w-4 text-primary" />{ride.origin}
                           <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
                         </div>
                       )}
-                      <div className="flex flex-wrap gap-3 mt-1.5 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm text-muted-foreground">
                         {ride && (
                           <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
                         )}
-                        <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""} booked</span>
+                        <span>{booking.seats} {t("ride_details.seat")}{booking.seats > 1 ? "s" : ""} booked</span>
                         {driver?.fullName && <span>Driver: {driver.fullName}</span>}
                       </div>
                     </div>

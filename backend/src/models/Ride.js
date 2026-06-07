@@ -103,6 +103,62 @@ const rideSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Live location tracking fields
+    currentLocation: {
+      latitude: {
+        type: Number,
+        default: null,
+      },
+      longitude: {
+        type: Number,
+        default: null,
+      },
+      timestamp: {
+        type: Date,
+        default: null,
+      },
+    },
+    locationHistory: [
+      {
+        latitude: Number,
+        longitude: Number,
+        timestamp: Date,
+      },
+    ],
+    isTrackingLocation: {
+      type: Boolean,
+      default: false,
+    },
+    // Ride completion confirmation fields
+    confirmByDriver: {
+      type: Boolean,
+      default: false,
+    },
+    confirmByPassenger: {
+      type: Boolean,
+      default: false,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
+    // Route deviation and extra charges
+    deviationDistance: {
+      type: Number,
+      default: 0,
+    },
+    extraCharge: {
+      type: Number,
+      default: 0,
+    },
+    deviationChargeRequested: {
+      type: Boolean,
+      default: false,
+    },
+    deviationChargeApproved: {
+      type: Boolean,
+      default: false,
+    },
     // Live tracking
     liveTracking: {
       isActive: { type: Boolean, default: false },
