@@ -99,6 +99,11 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
+    // Check if driver is approved by admin
+    if (!req.user.isApproved) {
+      return res.status(403).json({ message: "Your driver account is not approved by admin. Please wait for approval." });
+    }
+
     const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan" } = req.body;
 
     try {
