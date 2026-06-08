@@ -45,15 +45,16 @@ const calculateRidePrice = (driverFare) => {
  * Legacy wrapper — used by older code paths that call calculatePaymentAmounts(totalFare).
  * Here totalFare is already the passenger-facing total, so we split it directly.
  */
-const calculatePaymentAmounts = (totalFare) => {
+const calculatePaymentAmounts = (totalFare, driverEarning = null) => {
   const upfrontAmount   = Math.round(totalFare * UPFRONT_PERCENTAGE);
   const remainingAmount = totalFare - upfrontAmount;
+  const commission = driverEarning !== null ? totalFare - driverEarning : 0;
   return {
     totalFare,
     upfrontAmount,
     remainingAmount,
-    commission: 0,
-    driverEarning: remainingAmount,
+    commission,
+    driverEarning,
   };
 };
 
@@ -184,13 +185,16 @@ const createRemainingPaymentOrder = async (rideId, userId) => {
 
     const remainingAmount = ride.remainingAmount;
 
-    // Create Razorpay order
+    // Create Razorpay order for the remaining 75% payment
     const receipt = `ride_${rideId}_remaining`;
     const order = await createOrder(remainingAmount, receipt, {
       userId,
       rideId,
       type: "remaining",
     });
+
+    ride.remainingRazorpayOrderId = order.id;
+    await ride.save();
 
     return {
       orderId: order.id,
@@ -218,8 +222,9 @@ const processRemainingPayment = async (rideId, paymentId, signature, userId) => 
       throw new Error("Ride not found");
     }
 
-    // Verify payment
-    const isValid = verifyPayment(ride.razorpayOrderId, paymentId, signature);
+    // Verify payment against the remaining payment order
+    const orderIdToVerify = ride.remainingRazorpayOrderId || ride.razorpayOrderId;
+    const isValid = verifyPayment(orderIdToVerify, paymentId, signature);
     if (!isValid) {
       throw new Error("Invalid payment signature");
     }
@@ -230,13 +235,14 @@ const processRemainingPayment = async (rideId, paymentId, signature, userId) => 
       throw new Error("Payment not captured");
     }
 
-    // Calculate driver earnings
-    const { commission, driverEarning } = calculatePaymentAmounts(ride.totalFare);
+    // Determine driver earnings and commission from stored ride values
+    const driverEarning = ride.driverEarning || ride.driverFare || 0;
+    const commission = ride.totalFare - driverEarning;
 
     // Update ride payment status
     ride.razorpayPaymentId = paymentId;
     ride.paymentStatus = "FULL_PAID";
-    ride.commissionPercent = COMMISSION_PERCENTAGE * 100;
+    ride.commissionPercent = ride.totalFare ? Math.round((commission / ride.totalFare) * 100) : 0;
     ride.driverEarning = driverEarning;
     await ride.save();
 

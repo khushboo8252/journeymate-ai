@@ -57,6 +57,9 @@ router.put(
     body("phone").trim().notEmpty().withMessage("Phone number is required"),
     body("avatarUrl").optional().trim(),
     body("avatarPublicId").optional().trim(),
+    body("vehicleType")
+      .isIn(["hatchback", "sedan", "suv", "mpv", "van"])
+      .withMessage("Vehicle type is required"),
     body("vehicleSeats")
       .isInt({ min: 1, max: 15 })
       .withMessage("Vehicle seats must be between 1 and 15"),
@@ -77,7 +80,7 @@ router.put(
       return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
     }
 
-    const { fullName, phone, avatarUrl, avatarPublicId, vehicleSeats, bankAccountNumber, ifscCode, vehicleNumber, drivingLicense, aadharCard, panCard, rc, vehicleImage } = req.body;
+    const { fullName, phone, avatarUrl, avatarPublicId, vehicleType, vehicleSeats, bankAccountNumber, ifscCode, vehicleNumber, drivingLicense, aadharCard, panCard, rc, vehicleImage } = req.body;
 
     try {
       const user = await User.findByIdAndUpdate(
@@ -87,6 +90,7 @@ router.put(
           phone,
           ...(avatarUrl !== undefined && { avatarUrl }),
           ...(avatarPublicId !== undefined && { avatarPublicId }),
+          vehicleType,
           vehicleSeats: Number(vehicleSeats),
           bankAccountNumber,
           ifscCode: ifscCode.toUpperCase(),

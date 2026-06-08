@@ -33,6 +33,7 @@ const schema = z.object({
   date: z.string().min(1),
   time: z.string().min(1),
   arrivalTime: z.string().optional(),
+  vehicleType: z.enum(["hatchback", "sedan", "suv", "mpv", "van"]),
   vehicleSeats: z.string().min(1),
   price: z.string().refine(v => Number(v) > 0),
   description: z.string().optional(),
@@ -56,7 +57,7 @@ function PublishPage() {
 
   const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { vehicleSeats: "5" },
+    defaultValues: { vehicleType: "sedan", vehicleSeats: "5" },
   });
 
   const priceValue = useWatch({ control, name: "price" });
@@ -71,8 +72,8 @@ function PublishPage() {
         destination: values.destination,
         departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
         arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
+        vehicleType: values.vehicleType,
         seatsTotal: Number(values.vehicleSeats),
-        seatsAvailable: Number(values.vehicleSeats),
         pricePerSeat: Number(values.price),
         description: values.description || null,
       });
@@ -160,6 +161,20 @@ function PublishPage() {
               <div className="space-y-1.5">
                 <Label>{t("publish.arrival")} <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input type="time" {...register("arrivalTime")} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Vehicle Type</Label>
+                <Select defaultValue="sedan" onValueChange={v => setValue("vehicleType", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hatchback">Hatchback</SelectItem>
+                    <SelectItem value="sedan">Sedan</SelectItem>
+                    <SelectItem value="suv">SUV</SelectItem>
+                    <SelectItem value="mpv">MPV</SelectItem>
+                    <SelectItem value="van">Van</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.vehicleType && <p className="text-xs text-destructive">Vehicle type is required</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Vehicle Seats</Label>

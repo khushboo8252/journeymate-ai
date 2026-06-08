@@ -47,8 +47,13 @@ const userSchema = new mongoose.Schema(
     vehicleSeats: {
       type: Number,
       min: 1,
-      max: 8,
+      max: 15,
       default: null,
+    },
+    vehicleType: {
+      type: String,
+      enum: ["hatchback", "sedan", "suv", "mpv", "van"],
+      default: "sedan",
     },
     vehicleNumber: {
       type: String,

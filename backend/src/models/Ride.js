@@ -95,6 +95,10 @@ const rideSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    remainingRazorpayOrderId: {
+      type: String,
+      default: null,
+    },
     razorpayPaymentId: {
       type: String,
       default: null,

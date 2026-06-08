@@ -92,6 +92,7 @@ router.post(
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
+    body("seatsTotal").optional().isInt({ min: 1, max: 15 }).withMessage("Seats total must be a whole number between 1 and 15"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -104,11 +105,15 @@ router.post(
       return res.status(403).json({ message: "Your driver account is not approved by admin. Please wait for approval." });
     }
 
-    const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan" } = req.body;
+    const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan", seatsTotal: seatsTotalInput } = req.body;
 
     try {
       // Get total seats based on vehicle type
-      const seatsTotal = getTotalSeats(vehicleType);
+      const seatsTotalByType = getTotalSeats(vehicleType);
+      const seatsTotal = seatsTotalInput ? Number(seatsTotalInput) : seatsTotalByType;
+      if (seatsTotalInput && seatsTotal !== seatsTotalByType) {
+        return res.status(400).json({ message: `seatsTotal (${seatsTotal}) does not match vehicleType ${vehicleType} (${seatsTotalByType}).` });
+      }
 
       // Calculate passenger-facing price using the new formula
       const pricing = calculateRidePrice(Number(pricePerSeat));
@@ -402,17 +407,19 @@ router.post(
         return res.status(400).json({ message: "Ride is not active." });
       }
 
+      let result;
       // Process remaining payment (skip Razorpay verification in test mode)
       if (testMode && process.env.NODE_ENV !== "production") {
         console.log("TEST MODE: Skipping Razorpay verification for ride completion", rideId);
         // Update ride with mock payment data
         ride.razorpayPaymentId = paymentId;
         ride.paymentStatus = "FULL_PAID";
-        ride.commissionPercent = 10;
-        ride.driverEarning = (ride.totalFare || ride.pricePerSeat) * 0.9;
+        ride.driverEarning = ride.driverEarning || ride.driverFare || 0;
+        ride.commissionPercent = ride.totalFare ? Math.round(((ride.totalFare - ride.driverEarning) / ride.totalFare) * 100) : 0;
         await ride.save();
+        result = { driverEarning: ride.driverEarning };
       } else {
-        const result = await processRemainingPayment(rideId, paymentId, signature, userId);
+        result = await processRemainingPayment(rideId, paymentId, signature, userId);
       }
 
       // Update ride status to completed
