@@ -18,7 +18,7 @@ import { Footer } from "@/components/site/Footer";
 import { AnimatedBackground } from "@/components/site/AnimatedBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import heroImg from "@/assets/hero-car.jpg";
+import heroVideo from "@/assets/5379992-uhd_3840_2160_24fps.mp4";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -56,6 +56,18 @@ function Home() {
         <AnimatedBackground />
         {/* HERO */}
         <section className="relative overflow-hidden">
+          <div className="absolute inset-0 -z-10">
+            <video
+              src={heroVideo}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/5 via-background/10 to-background/30" />
+          </div>
+
           <div className="container mx-auto px-4 md:px-6 pt-20 pb-16 md:pt-32 md:pb-24">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
