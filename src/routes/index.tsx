@@ -19,6 +19,7 @@ import { AnimatedBackground } from "@/components/site/AnimatedBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import heroImg from "@/assets/hero-car.jpg";
+import heroVideo from "@/assets/hero-cars.mp4.asset.json";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -57,14 +58,17 @@ function Home() {
         {/* HERO */}
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 -z-10">
-            <img
-              src={heroImg}
-              alt="Car driving through an Indian city"
-              width={1920}
-              height={1080}
-              className="h-full w-full object-cover opacity-15"
+            <video
+              src={heroVideo.url}
+              poster={heroImg}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-full w-full object-cover opacity-40"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/90 to-background" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/80 to-background" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,var(--background)_85%)]" />
           </div>
 
           <div className="container mx-auto px-4 md:px-6 pt-20 pb-16 md:pt-32 md:pb-24">
