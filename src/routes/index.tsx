@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
+import { AnimatedBackground } from "@/components/site/AnimatedBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import heroImg from "@/assets/hero-car.jpg";
@@ -51,7 +52,8 @@ function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1">
+      <main className="flex-1 relative">
+        <AnimatedBackground />
         {/* HERO */}
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 -z-10">
