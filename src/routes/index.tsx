@@ -57,12 +57,12 @@ function Home() {
           <div className="absolute inset-0 -z-10">
             <img
               src={heroImg}
-              alt="Neon-lit car driving through an Indian city at night"
+              alt="Car driving through an Indian city"
               width={1920}
               height={1080}
-              className="h-full w-full object-cover opacity-40"
+              className="h-full w-full object-cover opacity-15"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/80 to-background" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/90 to-background" />
           </div>
 
           <div className="container mx-auto px-4 md:px-6 pt-20 pb-16 md:pt-32 md:pb-24">
