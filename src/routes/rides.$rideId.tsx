@@ -248,21 +248,7 @@ function RideDetailPage() {
     setBooking(true);
     try {
       // First lock the seats (IRCTC style - lock only on book button click)
-      try {
-        await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
-      } catch (lockError: any) {
-        // Handle seat lock errors (seats already booked/locked)
-        const errorMsg = lockError.response?.data?.error || lockError.message;
-        const failedSeats = lockError.response?.data?.failedSeats;
-        if (failedSeats && failedSeats.length > 0) {
-          toast.error(`Seats ${failedSeats.join(", ")} are not available. Please select other seats.`);
-        } else {
-          toast.error(errorMsg || "Failed to lock seats. Please try again.");
-        }
-        fetchSeats(); // Refresh seat status
-        setBooking(false);
-        return;
-      }
+      await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
       
       // Create booking (will return payment order)
       const bookingResponse = await api.post<{
@@ -652,39 +638,26 @@ function RideDetailPage() {
 
                   {canBook && (
                     <>
-                      {selectedSeats.length === 0 ? (
-                        <p className="text-xs text-amber-400 text-center">{t("ride_details.select_seats_hint")}</p>
-                      ) : (
-                        /* ── Fare breakdown ── */
-                        <div className="space-y-1.5 text-sm">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Ride Fare × {selectedSeats.length}</span>
-                            <span>₹{((ride.driverFare ?? ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Platform Fee</span>
-                            <span>₹{((ride.platformFee ?? 25) * selectedSeats.length).toLocaleString("en-IN")}</span>
-                          </div>
-                          <Separator />
-                          <div className="flex justify-between font-bold text-base">
-                            <span>Total</span>
-                            <div className="flex items-baseline gap-0.5">
-                              <IndianRupee className="h-3.5 w-3.5" />
-                              <span>{(((ride.driverFare ?? ride.pricePerSeat) + (ride.platformFee ?? 25)) * selectedSeats.length).toLocaleString("en-IN")}</span>
-                            </div>
-                          </div>
-                          <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 space-y-0.5 text-xs">
-                            <div className="flex justify-between text-primary font-semibold">
-                              <span>Pay now (25%)</span>
-                              <span>₹{Math.round(Number(ride.pricePerSeat) * selectedSeats.length * 0.25)}</span>
-                            </div>
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>Pay on completion (75%)</span>
-                              <span>₹{Math.round(Number(ride.pricePerSeat) * selectedSeats.length * 0.75)}</span>
-                            </div>
-                          </div>
+                      {/* Seat count + price row */}
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                          {selectedSeats.length === 0 ? (
+                            <span className="text-amber-400 text-xs">{t("ride_details.select_seats_hint")}</span>
+                          ) : (
+                            <span>
+                              <span className="font-semibold text-foreground">{selectedSeats.length}</span>
+                              {" "}{t("ride_details.passenger")}
+                            </span>
+                          )}
                         </div>
-                      )}
+                        {selectedSeats.length > 0 && (
+                          <div className="flex items-baseline gap-0.5 font-bold text-lg sm:text-xl">
+                            <IndianRupee className="h-4 w-4" />
+                            {(Number(ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}
+                            <span className="text-xs font-normal text-muted-foreground">.00</span>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Book button */}
                       <Button

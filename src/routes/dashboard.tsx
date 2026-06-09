@@ -1,10 +1,9 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { getSocket, joinUserRoom, joinDriverRoom, joinRideRoom, emitLocation } from "@/lib/socket";
-import { registerForPushNotifications, onForegroundMessage } from "@/lib/firebase";
+import { getSocket, joinUserRoom, joinDriverRoom } from "@/lib/socket";
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,13 +17,10 @@ import {
   Loader2,
   LogOut,
   MapPin,
-  Navigation,
   Phone,
-  Radio,
   Search,
   XCircle,
   ShieldCheck,
-  Square,
   Ticket,
   Trash2,
   User,
@@ -85,8 +81,6 @@ function DashboardPage() {
   const [selectedRideForSeatMap, setSelectedRideForSeatMap] = useState<ApiRide | null>(null);
   const [seatsForMap, setSeatsForMap] = useState<DriverSeat[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
-  const [trackingRideId, setTrackingRideId] = useState<string | null>(null);
-  const watchIdRef = useRef<number | null>(null);
   const isDriver = user?.role === "driver";
 
   // Search functionality for passengers
@@ -253,16 +247,6 @@ function DashboardPage() {
       }
     });
 
-    // Register for push notifications (best-effort; no-op if FCM not configured)
-    registerForPushNotifications();
-
-    // Show foreground push messages as toasts
-    const unsubscribeFcm = onForegroundMessage((payload) => {
-      if (payload.title || payload.body) {
-        toast(payload.title ?? "Notification", { description: payload.body });
-      }
-    });
-
     return () => {
       socket.off("driver_approved");
       socket.off("driver_rejected");
@@ -279,7 +263,6 @@ function DashboardPage() {
       socket.off("deviation_charge_requested");
       socket.off("deviation_charge_approved");
       socket.off("deviation_charge_rejected");
-      unsubscribeFcm();
     };
   }, [user]);
 
@@ -404,78 +387,10 @@ function DashboardPage() {
       
       toast.success(response.message);
       fetchData();
-      // TEST MODE: Direct ride completion without Razorpay
-      const completeResponse = await api.post<{ success: boolean; ride: any; driverEarning?: number }>(`/api/rides/${rideId}/test-complete`, {});
-      if (completeResponse.driverEarning !== undefined) {
-        toast.success(`Ride completed! Driver earning: ₹${completeResponse.driverEarning}`);
-      } else {
-        toast.success("Ride completed successfully!");
-      }
-      fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to request deviation charge");
     }
   };
-
-  // ── Live GPS tracking (driver) ──
-  const startRideTracking = async (rideId: string) => {
-    if (!("geolocation" in navigator)) {
-      toast.error("Geolocation is not supported by your browser");
-      return;
-    }
-    try {
-      await api.post(`/api/tracking/${rideId}/start`, {});
-      joinRideRoom(rideId);
-
-      const watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          if (!user) return;
-          emitLocation({
-            rideId,
-            driverId: user._id,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            speed: pos.coords.speed ?? 0,
-            heading: pos.coords.heading ?? null,
-          });
-        },
-        (err) => {
-          toast.error(`GPS error: ${err.message}`);
-        },
-        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-      );
-
-      watchIdRef.current = watchId;
-      setTrackingRideId(rideId);
-      toast.success("Ride started — sharing live location");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to start ride");
-    }
-  };
-
-  const stopRideTracking = async (rideId: string) => {
-    try {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      await api.post(`/api/tracking/${rideId}/stop`, {});
-      setTrackingRideId(null);
-      toast.success("Ride tracking stopped");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to stop ride");
-    }
-  };
-
-  // Clean up GPS watcher on unmount
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-    };
-  }, []);
 
   const handlePopupClick = async () => {
     // Mark notification as seen
@@ -759,31 +674,19 @@ function DashboardPage() {
             <TabsContent value="rides" className="space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <p className="text-sm text-muted-foreground">{t("dashboard.my_rides")}</p>
-                {user.isApproved ? (
-                  <Link to="/publish" className="w-full sm:w-auto">
-                    <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
-                      <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
-                    </Button>
-                  </Link>
-                ) : (
-                  <div className="w-full sm:w-auto">
-                    <Button size="sm" variant="outline" disabled className="w-full sm:w-auto" title="Your account is not approved by admin">
-                      <Lock className="h-4 w-4 mr-1" />Account Pending Approval
-                    </Button>
-                  </div>
-                )}
+                <Link to="/publish" className="w-full sm:w-auto">
+                  <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
+                    <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
+                  </Button>
+                </Link>
               </div>
               {myRides.length === 0 && (
                 <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Car className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">{t("dashboard.no_rides_desc")}</p>
-                  {user.isApproved ? (
-                    <Link to="/publish" className="mt-4 inline-block">
-                      <Button size="sm" variant="outline">{t("dashboard.publish_ride")}</Button>
-                    </Link>
-                  ) : (
-                    <p className="text-xs text-amber-600 mt-4">Your account is not approved by admin. Please wait for approval.</p>
-                  )}
+                  <Link to="/publish" className="mt-4 inline-block">
+                    <Button size="sm" variant="outline">{t("dashboard.publish_ride")}</Button>
+                  </Link>
                 </div>
               )}
               {myRides.map(ride => (
@@ -836,18 +739,6 @@ function DashboardPage() {
                         )}
                         <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm">
                           <Check className="h-4 w-4 mr-1" />{t("dashboard.confirm_complete")}
-                        </Button>
-                        {trackingRideId === ride._id ? (
-                          <Button size="sm" variant="default" onClick={() => stopRideTracking(ride._id)} className="bg-red-600 hover:bg-red-700">
-                            <Square className="h-4 w-4 mr-1" />Stop Ride
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="default" onClick={() => startRideTracking(ride._id)} className="bg-blue-600 hover:bg-blue-700">
-                            <Navigation className="h-4 w-4 mr-1" />Start Ride
-                          </Button>
-                        )}
-                        <Button size="sm" variant="default" onClick={() => completeRide(ride._id)} className="bg-green-600 hover:bg-green-700">
-                          <Check className="h-4 w-4 mr-1" />Complete
                         </Button>
                         {(() => {
                           const now = new Date();
@@ -1005,13 +896,6 @@ function DashboardPage() {
                       <Badge variant={booking.status === "confirmed" ? "default" : "secondary"} className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
                         {booking.status}
                       </Badge>
-                      {booking.status === "confirmed" && ride && (
-                        <Link to="/rides/$rideId/track" params={{ rideId: ride._id }}>
-                          <Button size="sm" variant="default" className="bg-blue-600 hover:bg-blue-700">
-                            <Radio className="h-4 w-4 mr-1" />Track
-                          </Button>
-                        </Link>
-                      )}
                       {booking.status === "confirmed" && (
                         <Button size="sm" variant="ghost" onClick={() => cancelBooking(booking._id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="h-4 w-4" />

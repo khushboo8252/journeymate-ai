@@ -32,7 +32,6 @@ export const Route = createFileRoute("/driver-setup")({
 const schema = z.object({
   fullName: z.string().min(2),
   phone: z.string().min(10),
-  vehicleType: z.enum(["hatchback", "sedan", "suv", "mpv", "van"]),
   vehicleNumber: z.string().min(1),
   vehicleSeats: z.string().min(1),
   bankAccountNumber: z
@@ -77,7 +76,6 @@ function DriverSetupPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       fullName: "",
-      vehicleType: "sedan",
     },
   });
 
@@ -85,7 +83,6 @@ function DriverSetupPage() {
     if (!loading && user) {
       setValue("fullName", user.fullName ?? "");
       setValue("phone", user.phone ?? "");
-      setValue("vehicleType", (user as any).vehicleType ?? "sedan");
       if (user.avatarUrl) setAvatarPreview(user.avatarUrl);
       if (user.role !== "driver") navigate({ to: "/dashboard" });
     }
@@ -199,7 +196,6 @@ function DriverSetupPage() {
       const payload: any = {
         fullName: values.fullName,
         phone: values.phone,
-        vehicleType: values.vehicleType,
         vehicleNumber: values.vehicleNumber,
         vehicleSeats: values.vehicleSeats,
         bankAccountNumber: values.bankAccountNumber,
@@ -365,25 +361,6 @@ function DriverSetupPage() {
               </h2>
               <Separator />
               <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
-                <div className="space-y-1.5">
-                  <Label>{t("driver_setup.vehicle_type")}</Label>
-                  <Select
-                    defaultValue="sedan"
-                    onValueChange={v => setValue("vehicleType", v)}
-                  >
-                    <SelectTrigger className="bg-background/60 border-border/40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hatchback">Hatchback</SelectItem>
-                      <SelectItem value="sedan">Sedan</SelectItem>
-                      <SelectItem value="suv">SUV</SelectItem>
-                      <SelectItem value="mpv">MPV</SelectItem>
-                      <SelectItem value="van">Van</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.vehicleType && <p className="text-xs text-destructive">{t("driver_setup.vehicle_type")}</p>}
-                </div>
                 <div className="space-y-1.5">
                   <Label>{t("driver_setup.vehicle_seats")}</Label>
                   <Select

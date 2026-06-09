@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, setToken, removeToken } from "@/lib/api";
 import type { ApiUser } from "@/lib/api";
-import { unregisterPushNotifications } from "@/lib/firebase";
 
 interface AuthContextType {
   user: ApiUser | null;
@@ -33,7 +32,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = () => {
-    unregisterPushNotifications().catch(() => {});
     removeToken();
     setUser(null);
   };

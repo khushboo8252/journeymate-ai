@@ -27,8 +27,9 @@ export function Header() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
         <Link to="/" className="flex items-center gap-2 group">
           <div className="relative">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 shadow-sm">
-              <Car className="h-5 w-5 text-primary-foreground" />
+            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-[var(--neon-cyan)] to-[var(--neon-magenta)] blur-md opacity-60 group-hover:opacity-100 transition-opacity" />
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-background border border-border/60">
+              <Car className="h-5 w-5 text-primary" />
             </div>
           </div>
           <span className="text-lg font-bold tracking-tight">

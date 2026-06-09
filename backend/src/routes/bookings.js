@@ -5,7 +5,6 @@ const Ride = require("../models/Ride");
 const Seat = require("../models/Seat");
 const { protect, restrictTo } = require("../middleware/auth");
 const { createUpfrontPaymentOrder, processUpfrontPayment } = require("../services/paymentService");
-const { sendToUser } = require("../services/notificationService");
 
 const router = express.Router();
 
@@ -122,73 +121,6 @@ router.post(
   }
 );
 
-// POST /api/bookings/test-confirm — Test mode: confirm booking without Razorpay (development only)
-router.post("/test-confirm", protect, async (req, res) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(403).json({ message: "Test mode not allowed in production." });
-  }
-
-  const { bookingId } = req.body;
-  const userId = req.user._id;
-
-  try {
-    const booking = await Booking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: "Booking not found." });
-    if (String(booking.passengerId) !== String(userId)) {
-      return res.status(403).json({ message: "You can only confirm your own bookings." });
-    }
-    if (booking.status !== "pending_payment") {
-      return res.status(400).json({ message: "Booking is not in pending payment state." });
-    }
-
-    console.log("TEST MODE: Confirming booking without Razorpay", bookingId);
-
-    // Update ride with mock payment data
-    const ride = await Ride.findById(booking.rideId);
-    if (ride) {
-      ride.razorpayPaymentId = `test_payment_${Date.now()}`;
-      ride.upfrontPaid = booking.upfrontAmount;
-      ride.paymentStatus = "PARTIAL_PAID";
-      await ride.save();
-    }
-
-    // Convert locked seats to booked
-    await Seat.bookSeats(booking.rideId, booking.seatNumbers, userId, booking._id);
-
-    // Update booking status
-    booking.status = "confirmed";
-    await booking.save();
-
-    // Update ride seatsAvailable
-    const seatCounts = await Seat.getSeatCounts(booking.rideId);
-    ride.seatsAvailable = seatCounts.available;
-    await ride.save();
-
-    // Emit real-time events
-    const io = global.io;
-    if (io) {
-      io.to(`ride_${booking.rideId}`).emit("seat_booked", {
-        rideId: booking.rideId,
-        seatNumbers: booking.seatNumbers,
-        passengerId: userId,
-      });
-      io.to(`driver_${ride.driverId}`).emit("new_booking", booking);
-    }
-
-    // Send notification to driver
-    await sendToUser(ride.driverId.toString(), {
-      title: "New Booking Confirmed",
-      body: `${booking.passengerName} booked ${booking.seatNumbers.length} seat(s) on your ride.`,
-      data: { rideId: booking.rideId, bookingId: booking._id },
-    });
-
-    res.json({ success: true, booking });
-  } catch (err) {
-    console.error("Test confirm booking error:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
 // POST /api/bookings/confirm — Confirm booking after payment
 router.post(
   "/confirm",
@@ -204,7 +136,7 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { bookingId, paymentId, signature, testMode } = req.body;
+    const { bookingId, paymentId, signature } = req.body;
     const userId = req.user._id;
 
     try {
@@ -217,20 +149,8 @@ router.post(
         return res.status(400).json({ message: "Booking is not in pending payment state." });
       }
 
-      // Process upfront payment (skip Razorpay verification in test mode)
-      if (testMode && process.env.NODE_ENV !== "production") {
-        console.log("TEST MODE: Skipping Razorpay verification for booking", bookingId);
-        // Update ride with mock payment data
-        const ride = await Ride.findById(booking.rideId);
-        if (ride) {
-          ride.razorpayPaymentId = paymentId;
-          ride.upfrontPaid = booking.upfrontAmount;
-          ride.paymentStatus = "PARTIAL_PAID";
-          await ride.save();
-        }
-      } else {
-        await processUpfrontPayment(booking.rideId, paymentId, signature, userId);
-      }
+      // Process upfront payment
+      await processUpfrontPayment(booking.rideId, paymentId, signature, userId);
 
       // Convert locked seats to booked
       await Seat.bookSeats(booking.rideId, booking.seatNumbers, userId, booking._id);
@@ -260,13 +180,6 @@ router.post(
         passengerName: req.user.fullName
       });
       global.io.emit("ride_updated", ride);
-
-      // Push notification to driver
-      sendToUser(ride.driverId, {
-        title: "New Booking 🎉",
-        body: `${req.user.fullName} booked seat${booking.seatNumbers.length > 1 ? "s" : ""} ${booking.seatNumbers.join(", ")}`,
-        data: { type: "new_booking", rideId: booking.rideId.toString() },
-      });
 
       res.json({ success: true, booking: bookingWithDetails });
     } catch (err) {
@@ -311,13 +224,6 @@ router.patch("/:id/cancel", protect, async (req, res) => {
         seatNumbers: booking.seatNumbers || []
       });
       global.io.emit("ride_updated", ride);
-
-      // Push notification to driver
-      sendToUser(ride.driverId, {
-        title: "Booking Cancelled",
-        body: `${req.user.fullName} cancelled their booking for ${ride.origin} → ${ride.destination}`,
-        data: { type: "booking_cancelled", rideId: booking.rideId.toString() },
-      });
     }
 
     res.json(booking);

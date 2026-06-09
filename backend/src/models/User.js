@@ -47,13 +47,8 @@ const userSchema = new mongoose.Schema(
     vehicleSeats: {
       type: Number,
       min: 1,
-      max: 15,
+      max: 8,
       default: null,
-    },
-    vehicleType: {
-      type: String,
-      enum: ["hatchback", "sedan", "suv", "mpv", "van"],
-      default: "sedan",
     },
     vehicleNumber: {
       type: String,
@@ -119,11 +114,6 @@ const userSchema = new mongoose.Schema(
     isProfileComplete: {
       type: Boolean,
       default: false,
-    },
-    // Firebase Cloud Messaging device tokens for push notifications
-    fcmTokens: {
-      type: [String],
-      default: [],
     },
     passwordChangedAt: {
       type: Date,

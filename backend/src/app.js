@@ -15,8 +15,6 @@ const adminRoutes = require("./routes/admin");
 const uploadRoutes = require("./routes/upload");
 const seatsRoutes = require("./routes/seats");
 const paymentRoutes = require("./routes/payments");
-const trackingRoutes = require("./routes/tracking");
-const withdrawalsRoutes = require("./routes/withdrawals");
 
 const app = express();
 const httpServer = createServer(app);
@@ -65,8 +63,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api", seatsRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use("/api/tracking", trackingRoutes);
-app.use("/api/withdrawals", withdrawalsRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
@@ -115,42 +111,6 @@ mongoose
       socket.on("leave_ride", (rideId) => {
         socket.leave(`ride_${rideId}`);
         console.log(`Client left ride room: ${rideId}`);
-      });
-
-      // ── Live location tracking ──
-      // Driver emits GPS updates; persist latest position and broadcast to ride room
-      socket.on("location_update", async (data) => {
-        try {
-          const { rideId, driverId, lat, lng, speed, heading } = data || {};
-          if (!rideId || lat == null || lng == null) return;
-
-          const RideLocation = require("./models/RideLocation");
-          await RideLocation.findOneAndUpdate(
-            { rideId },
-            {
-              rideId,
-              driverId,
-              lat,
-              lng,
-              speed: speed || 0,
-              heading: heading ?? null,
-              updatedAt: new Date(),
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-          );
-
-          // Broadcast to everyone watching this ride (passengers)
-          io.to(`ride_${rideId}`).emit("driver_location", {
-            rideId,
-            lat,
-            lng,
-            speed: speed || 0,
-            heading: heading ?? null,
-            updatedAt: new Date(),
-          });
-        } catch (err) {
-          console.error("location_update error:", err.message);
-        }
       });
 
       // Handle seat lock requests

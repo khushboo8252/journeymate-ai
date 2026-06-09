@@ -58,18 +58,6 @@ const rideSchema = new mongoose.Schema(
       default: "sedan",
     },
     // Payment fields
-    driverFare: {
-      type: Number,
-      default: 0,
-    },
-    platformFee: {
-      type: Number,
-      default: 0,
-    },
-    extraCharge: {
-      type: Number,
-      default: 0,
-    },
     totalFare: {
       type: Number,
       default: 0,
@@ -82,6 +70,10 @@ const rideSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    commissionPercent: {
+      type: Number,
+      default: 10,
+    },
     driverEarning: {
       type: Number,
       default: 0,
@@ -92,10 +84,6 @@ const rideSchema = new mongoose.Schema(
       default: "PENDING",
     },
     razorpayOrderId: {
-      type: String,
-      default: null,
-    },
-    remainingRazorpayOrderId: {
       type: String,
       default: null,
     },
@@ -162,12 +150,6 @@ const rideSchema = new mongoose.Schema(
     deviationChargeApproved: {
       type: Boolean,
       default: false,
-    },
-    // Live tracking
-    liveTracking: {
-      isActive: { type: Boolean, default: false },
-      startedAt: { type: Date, default: null },
-      endedAt: { type: Date, default: null },
     },
   },
   { timestamps: true }
