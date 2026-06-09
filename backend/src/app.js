@@ -16,6 +16,7 @@ const uploadRoutes = require("./routes/upload");
 const seatsRoutes = require("./routes/seats");
 const paymentRoutes = require("./routes/payments");
 const trackingRoutes = require("./routes/tracking");
+const withdrawalsRoutes = require("./routes/withdrawals");
 
 const app = express();
 const httpServer = createServer(app);
@@ -65,6 +66,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api", seatsRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/tracking", trackingRoutes);
+app.use("/api/withdrawals", withdrawalsRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err.stack);

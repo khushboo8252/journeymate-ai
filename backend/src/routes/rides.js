@@ -333,6 +333,14 @@ router.post("/:id/test-complete", protect, async (req, res) => {
     ride.driverEarning = (ride.totalFare || ride.pricePerSeat) * 0.9;
     await ride.save();
 
+    // Add earnings to driver's wallet
+    const User = require("../models/User");
+    const driver = await User.findById(ride.driverId);
+    if (driver) {
+      driver.earnings = (driver.earnings || 0) + ride.driverEarning;
+      await driver.save();
+    }
+
     // Update ride status to completed
     ride.status = "completed";
     await ride.save();

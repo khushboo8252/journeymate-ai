@@ -42,12 +42,11 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 function calculateRidePrice(driverFare: number) {
-  const platformFee    = Math.round(driverFare * 0.3333);
-  const extraCharge    = Math.round(platformFee * 0.30);
-  const totalAmount    = driverFare + platformFee + extraCharge;
+  const platformFee    = 25; // Fixed ₹25 platform fee
+  const totalAmount    = driverFare + platformFee;
   const bookingAmount  = Math.round(totalAmount * 0.25);
   const remainingAmount = totalAmount - bookingAmount;
-  return { driverFare, platformFee, extraCharge, totalAmount, bookingAmount, remainingAmount };
+  return { driverFare, platformFee, totalAmount, bookingAmount, remainingAmount };
 }
 
 function PublishPage() {
@@ -164,7 +163,7 @@ function PublishPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Vehicle Type</Label>
-                <Select defaultValue="sedan" onValueChange={v => setValue("vehicleType", v)}>
+                <Select defaultValue="sedan" onValueChange={(v) => setValue("vehicleType", v as "hatchback" | "sedan" | "suv" | "mpv" | "van")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="hatchback">Hatchback</SelectItem>
@@ -214,10 +213,6 @@ function PublishPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Platform Fee</span>
                     <span className="font-medium">₹{pricing.platformFee}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Convenience Charge</span>
-                    <span className="font-medium">₹{pricing.extraCharge}</span>
                   </div>
                   <Separator className="my-1" />
                   <div className="flex justify-between font-semibold text-base">

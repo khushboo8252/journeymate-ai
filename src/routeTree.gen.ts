@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WithdrawalsRouteImport } from './routes/withdrawals'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as PublishRouteImport } from './routes/publish'
 import { Route as DriverSetupRouteImport } from './routes/driver-setup'
@@ -21,6 +22,11 @@ import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
 import { Route as RidesRideIdTrackRouteImport } from './routes/rides.$rideId_.track'
 
+const WithdrawalsRoute = WithdrawalsRouteImport.update({
+  id: '/withdrawals',
+  path: '/withdrawals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/withdrawals': typeof WithdrawalsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByTo {
   '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/withdrawals': typeof WithdrawalsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
@@ -112,6 +120,7 @@ export interface FileRoutesById {
   '/driver-setup': typeof DriverSetupRoute
   '/publish': typeof PublishRoute
   '/search': typeof SearchRoute
+  '/withdrawals': typeof WithdrawalsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/rides/$rideId': typeof RidesRideIdRoute
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/driver-setup'
     | '/publish'
     | '/search'
+    | '/withdrawals'
     | '/admin/dashboard'
     | '/admin/login'
     | '/rides/$rideId'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/driver-setup'
     | '/publish'
     | '/search'
+    | '/withdrawals'
     | '/admin/dashboard'
     | '/admin/login'
     | '/rides/$rideId'
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/driver-setup'
     | '/publish'
     | '/search'
+    | '/withdrawals'
     | '/admin/dashboard'
     | '/admin/login'
     | '/rides/$rideId'
@@ -167,6 +179,7 @@ export interface RootRouteChildren {
   DriverSetupRoute: typeof DriverSetupRoute
   PublishRoute: typeof PublishRoute
   SearchRoute: typeof SearchRoute
+  WithdrawalsRoute: typeof WithdrawalsRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminLoginRoute: typeof AdminLoginRoute
   RidesRideIdRoute: typeof RidesRideIdRoute
@@ -175,6 +188,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/withdrawals': {
+      id: '/withdrawals'
+      path: '/withdrawals'
+      fullPath: '/withdrawals'
+      preLoaderRoute: typeof WithdrawalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/search': {
       id: '/search'
       path: '/search'
@@ -263,6 +283,7 @@ const rootRouteChildren: RootRouteChildren = {
   DriverSetupRoute: DriverSetupRoute,
   PublishRoute: PublishRoute,
   SearchRoute: SearchRoute,
+  WithdrawalsRoute: WithdrawalsRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminLoginRoute: AdminLoginRoute,
   RidesRideIdRoute: RidesRideIdRoute,

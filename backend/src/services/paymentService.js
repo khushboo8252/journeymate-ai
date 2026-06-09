@@ -4,35 +4,31 @@ const Transaction = require("../models/Transaction");
 const { createOrder, verifyPayment, fetchPayment, createPayout } = require("../utils/razorpay");
 const { payoutQueue } = require("../config/queue");
 
-const PLATFORM_FEE_RATE = 0.3333;  // ~33.33% of driver fare → platform fee
-const EXTRA_CHARGE_RATE = 0.30;     // 30% of platform fee → extra/convenience charge
+const PLATFORM_FEE = 25;  // Fixed ₹25 platform fee
 const UPFRONT_PERCENTAGE = 0.25;    // 25% of total paid upfront
 const PAYOUT_DELAY_HOURS = 3;       // 3 hours delay for driver payout
 
 /**
  * Calculate pricing breakdown from the driver's fare.
- * Formula:
- *   platformFee    = round(driverFare × 0.3333)
- *   extraCharge    = round(platformFee × 0.30)
- *   totalAmount    = driverFare + platformFee + extraCharge
+ * New Formula:
+ *   platformFee    = ₹25 (fixed)
+ *   totalAmount    = driverFare + ₹25
  *   bookingAmount  = round(totalAmount × 0.25)   ← paid now
  *   remainingAmount= totalAmount − bookingAmount  ← paid on completion
- *   driverEarning  = driverFare  (driver always gets their own fare, not more)
- *   platformRevenue= totalAmount − driverFare
+ *   driverEarning  = driverFare  (driver always gets their own fare)
+ *   platformRevenue= ₹25
  */
 const calculateRidePrice = (driverFare) => {
-  const platformFee    = Math.round(driverFare * PLATFORM_FEE_RATE);
-  const extraCharge    = Math.round(platformFee * EXTRA_CHARGE_RATE);
-  const totalAmount    = driverFare + platformFee + extraCharge;
+  const platformFee    = PLATFORM_FEE;
+  const totalAmount    = driverFare + platformFee;
   const bookingAmount  = Math.round(totalAmount * UPFRONT_PERCENTAGE);
   const remainingAmount = totalAmount - bookingAmount;
-  const platformRevenue = platformFee + extraCharge;
+  const platformRevenue = platformFee;
   const driverEarning  = driverFare; // driver always gets exactly their stated fare
 
   return {
     driverFare,
     platformFee,
-    extraCharge,
     totalAmount,
     bookingAmount,
     remainingAmount,
@@ -103,7 +99,6 @@ const createUpfrontPaymentOrder = async (rideId, userId, seatsBooked = 1) => {
       pricing: {
         driverFare:      pricing.driverFare * seatsBooked,
         platformFee:     pricing.platformFee * seatsBooked,
-        extraCharge:     pricing.extraCharge * seatsBooked,
         totalAmount:     totalFare,
         bookingAmount,
         remainingAmount: remaining,
@@ -392,7 +387,6 @@ module.exports = {
   processRemainingPayment,
   releaseDriverPayment,
   UPFRONT_PERCENTAGE,
-  PLATFORM_FEE_RATE,
-  EXTRA_CHARGE_RATE,
+  PLATFORM_FEE,
   PAYOUT_DELAY_HOURS,
 };

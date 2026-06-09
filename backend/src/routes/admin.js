@@ -4,6 +4,7 @@ const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
+const Withdrawal = require("../models/Withdrawal");
 const { protect, adminOnly } = require("../middleware/auth");
 const adminAuth = require("../middleware/adminAuth");
 const { sendDriverApprovalEmail } = require("../utils/email");
@@ -306,6 +307,18 @@ router.get("/stats", adminAuth, async (req, res) => {
     const completedRides = await Ride.countDocuments({ status: "completed" });
     const cancelledRides = await Ride.countDocuments({ status: "cancelled" });
 
+    // Calculate total revenue from completed rides
+    const completedRidesData = await Ride.find({ status: "completed" });
+    const totalRevenue = completedRidesData.reduce((sum, ride) => {
+      // Calculate revenue from actual payments (totalFare or pricePerSeat * booked seats)
+      const bookedSeats = ride.seatsTotal - ride.seatsAvailable;
+      return sum + (ride.totalFare || (ride.pricePerSeat * bookedSeats));
+    }, 0);
+
+    // Calculate platform commission (10% of total revenue)
+    const platformCommission = totalRevenue * 0.1;
+    const driverEarnings = totalRevenue - platformCommission;
+
     res.json({
       users: userCount,
       rides: rideCount,
@@ -313,6 +326,146 @@ router.get("/stats", adminAuth, async (req, res) => {
       activeRides,
       completedRides,
       cancelledRides,
+      totalRevenue,
+      platformCommission,
+      driverEarnings,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/admin/withdrawals — Get all withdrawals (admin only)
+router.get("/withdrawals", adminAuth, async (req, res) => {
+  try {
+    const { status, limit = 50, skip = 0 } = req.query;
+    
+    const filter = {};
+    if (status) filter.status = status;
+    
+    const withdrawals = await Withdrawal.find(filter)
+      .populate("driverId", "fullName email")
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .skip(Number(skip))
+      .lean();
+    
+    const stats = await Withdrawal.aggregate([
+      { $group: { 
+        _id: "$status", 
+        count: { $sum: 1 },
+        total: { $sum: "$amount" }
+      }}
+    ]);
+    
+    const statsMap = {};
+    stats.forEach(s => {
+      statsMap[s._id] = { count: s.count, total: s.total };
+    });
+    
+    res.json({
+      withdrawals,
+      stats: {
+        pending: statsMap.pending || { count: 0, total: 0 },
+        approved: statsMap.approved || { count: 0, total: 0 },
+        paid: statsMap.paid || { count: 0, total: 0 },
+        rejected: statsMap.rejected || { count: 0, total: 0 },
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/admin/withdrawals/:id/approve — Approve withdrawal (admin only)
+router.patch("/withdrawals/:id/approve", adminAuth, async (req, res) => {
+  try {
+    const withdrawal = await Withdrawal.findById(req.params.id);
+    if (!withdrawal) {
+      return res.status(404).json({ message: "Withdrawal not found" });
+    }
+
+    if (withdrawal.status !== "pending") {
+      return res.status(400).json({ message: "Withdrawal is not in pending status" });
+    }
+
+    // Update withdrawal status
+    withdrawal.status = "approved";
+    withdrawal.processedBy = req.user?._id || null;
+    withdrawal.processedAt = new Date();
+    await withdrawal.save();
+
+    res.json({
+      success: true,
+      message: "Withdrawal approved successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/admin/withdrawals/:id/mark-paid — Mark withdrawal as paid (admin only, for cash withdrawals)
+router.patch("/withdrawals/:id/mark-paid", adminAuth, async (req, res) => {
+  try {
+    const withdrawal = await Withdrawal.findById(req.params.id);
+    if (!withdrawal) {
+      return res.status(404).json({ message: "Withdrawal not found" });
+    }
+
+    if (withdrawal.status !== "approved") {
+      return res.status(400).json({ message: "Withdrawal must be approved before marking as paid" });
+    }
+
+    if (withdrawal.withdrawalMethod !== "cash") {
+      return res.status(400).json({ message: "Only cash withdrawals can be marked as paid manually" });
+    }
+
+    // Update withdrawal status
+    withdrawal.status = "paid";
+    withdrawal.processedBy = req.user?._id || null;
+    withdrawal.processedAt = new Date();
+    await withdrawal.save();
+
+    res.json({
+      success: true,
+      message: "Withdrawal marked as paid",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/admin/withdrawals/:id/reject — Reject withdrawal (admin only)
+router.patch("/withdrawals/:id/reject", adminAuth, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    
+    const withdrawal = await Withdrawal.findById(req.params.id);
+    if (!withdrawal) {
+      return res.status(404).json({ message: "Withdrawal not found" });
+    }
+
+    if (withdrawal.status !== "pending") {
+      return res.status(400).json({ message: "Withdrawal is not in pending status" });
+    }
+
+    // Update withdrawal status
+    withdrawal.status = "rejected";
+    withdrawal.rejectionReason = reason || "Withdrawal rejected by admin";
+    withdrawal.processedBy = req.user?._id || null;
+    withdrawal.processedAt = new Date();
+    await withdrawal.save();
+
+    // Refund amount back to driver's earnings
+    const driver = await User.findById(withdrawal.driverId);
+    if (driver) {
+      driver.earnings = (driver.earnings || 0) + withdrawal.amount;
+      await driver.save();
+    }
+
+    res.json({
+      success: true,
+      message: "Withdrawal rejected and amount refunded to driver's earnings",
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

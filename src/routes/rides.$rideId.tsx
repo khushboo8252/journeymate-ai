@@ -663,18 +663,14 @@ function RideDetailPage() {
                           </div>
                           <div className="flex justify-between text-muted-foreground">
                             <span>Platform Fee</span>
-                            <span>₹{((ride.platformFee ?? 0) * selectedSeats.length).toLocaleString("en-IN")}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Convenience</span>
-                            <span>₹{((ride.extraCharge ?? 0) * selectedSeats.length).toLocaleString("en-IN")}</span>
+                            <span>₹{((ride.platformFee ?? 25) * selectedSeats.length).toLocaleString("en-IN")}</span>
                           </div>
                           <Separator />
                           <div className="flex justify-between font-bold text-base">
                             <span>Total</span>
                             <div className="flex items-baseline gap-0.5">
                               <IndianRupee className="h-3.5 w-3.5" />
-                              <span>{(Number(ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}</span>
+                              <span>{(((ride.driverFare ?? ride.pricePerSeat) + (ride.platformFee ?? 25)) * selectedSeats.length).toLocaleString("en-IN")}</span>
                             </div>
                           </div>
                           <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 space-y-0.5 text-xs">

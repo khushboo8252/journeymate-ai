@@ -56,6 +56,7 @@ export interface ApiUser {
   createdAt: string;
   updatedAt?: string;
   rideCancellationCount?: number;
+  earnings?: number;
 }
 
 export interface ApiRide {
@@ -70,7 +71,6 @@ export interface ApiRide {
   pricePerSeat: number;
   driverFare?: number;
   platformFee?: number;
-  extraCharge?: number;
   description: string | null;
   vehicleType?: "hatchback" | "sedan" | "suv" | "mpv" | "van";
   status: "active" | "completed" | "cancelled";
