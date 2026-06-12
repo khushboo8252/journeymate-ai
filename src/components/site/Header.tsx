@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import "@/i18n";
-import { Car, LayoutDashboard, LogOut, Plus } from "lucide-react";
+import { LayoutDashboard, LogOut, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LanguageToggle } from "./LanguageToggle";
 import { useAuth } from "@/hooks/use-auth";
+import logoImg from "@/assets/3D.jpg";
 
 export function Header() {
   const { t } = useTranslation();
@@ -28,13 +29,10 @@ export function Header() {
         <Link to="/" className="flex items-center gap-2 group">
           <div className="relative">
             <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-[var(--neon-cyan)] to-[var(--neon-magenta)] blur-md opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-background border border-border/60">
-              <Car className="h-5 w-5 text-primary" />
+            <div className="relative flex h-16 w-32 items-center justify-center rounded-lg bg-background border border-border/60 overflow-hidden">
+              <img src={logoImg} alt="Logo" className="h-full w-full object-cover" />
             </div>
           </div>
-          <span className="text-lg font-bold tracking-tight">
-            Uk<span className="text-gradient">yro</span>
-          </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
