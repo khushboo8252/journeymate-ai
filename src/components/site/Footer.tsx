@@ -18,7 +18,7 @@ export function Footer() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Ukyro. {t("footer.rights")}
+            © {new Date().getFullYear()} UKYRO. {t("footer.rights")}
           </p>
         </div>
       </div>
