@@ -6,16 +6,19 @@ import { hi } from "./locales/hi";
 
 if (!i18n.isInitialized) {
   const isBrowser = typeof window !== "undefined";
-  const chain = isBrowser
-    ? i18n.use(LanguageDetector).use(initReactI18next)
-    : i18n.use(initReactI18next);
+  
+  i18n.use(initReactI18next);
 
-  chain.init({
+  if (isBrowser) {
+    i18n.use(LanguageDetector);
+  }
+
+  i18n.init({
     resources: {
       en: { translation: en },
       hi: { translation: hi },
     },
-    lng: isBrowser ? undefined : "en",
+    lng: "en",
     fallbackLng: "en",
     supportedLngs: ["en", "hi"],
     interpolation: { escapeValue: false },
