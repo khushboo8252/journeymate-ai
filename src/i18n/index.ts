@@ -639,4 +639,13 @@ if (!i18n.isInitialized) {
   });
 }
 
+console.log("========== I18N DEBUG ==========");
+console.log("I18N FILE EXECUTED");
+console.log("isInitialized:", i18n.isInitialized);
+console.log("language:", i18n.language);
+console.log("instance:", i18n);
+console.log("changeLanguage:", typeof i18n.changeLanguage);
+console.log("================================");
+
 export default i18n;
+
