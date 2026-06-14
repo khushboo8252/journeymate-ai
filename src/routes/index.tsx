@@ -18,7 +18,7 @@ import { Footer } from "@/components/site/Footer";
 import { AnimatedBackground } from "@/components/site/AnimatedBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import heroVideo from "@/assets/5379992-uhd_3840_2160_24fps.mp4";
+import heroVideo from "@/assets/hero-cars.mp4.asset.json";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -58,7 +58,7 @@ function Home() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 -z-10">
             <video
-              src={heroVideo}
+              src={heroVideo.url}
               autoPlay
               loop
               muted
