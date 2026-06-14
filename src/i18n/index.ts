@@ -5,7 +5,6 @@ import { hi } from "./locales/hi";
 
 // Initialize i18n synchronously for SSR
 i18n.use(initReactI18next).init({
-  initAsync: false,
   resources: {
     en: { translation: en },
     hi: { translation: hi },
