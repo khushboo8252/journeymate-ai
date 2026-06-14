@@ -4,7 +4,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/use-auth";
 
 import appCss from "../styles.css?url";
-import "@/i18n";
 
 const queryClient = new QueryClient();
 
