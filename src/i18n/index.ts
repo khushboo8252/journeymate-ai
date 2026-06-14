@@ -3,6 +3,7 @@ import { initReactI18next } from "react-i18next";
 import { en } from "./locales/en";
 import { hi } from "./locales/hi";
 
+// Initialize i18n synchronously for SSR
 i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
@@ -12,7 +13,9 @@ i18n.use(initReactI18next).init({
   fallbackLng: "en",
   supportedLngs: ["en", "hi"],
   interpolation: { escapeValue: false },
-  react: { useSuspense: false },
+  react: { 
+    useSuspense: false,
+  },
 });
 
 export default i18n;
