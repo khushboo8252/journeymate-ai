@@ -1,0 +1,25 @@
+src/i18n/index.ts
+  e3330d31a38fdf6a 625
+src/main.tsx
+  e3330d31a38fdf6a 5-6,21-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "ccc7dad401c96e10025fd9795989f86cc3e6d402",
+  "prompts": {
+    "e3330d31a38fdf6a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69ed804b-561c-4653-be71-a137690f192b",
+        "model": "<synthetic>"
+      },
+      "human_author": "Nagendra Singh <Nagendra.Singh@leadsquared.com>",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 13,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    }
+  }
+}
