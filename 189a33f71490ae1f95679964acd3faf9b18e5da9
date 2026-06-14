@@ -1,0 +1,23 @@
+src/main.tsx
+  e3330d31a38fdf6a 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "189a33f71490ae1f95679964acd3faf9b18e5da9",
+  "prompts": {
+    "e3330d31a38fdf6a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69ed804b-561c-4653-be71-a137690f192b",
+        "model": "<synthetic>"
+      },
+      "human_author": "nagendrax02 <nagendrax02@gmail.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
