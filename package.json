@@ -1,7 +1,7 @@
 {
   "name": "ukyro",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": ["./src/i18n/index.ts", "*.css"],
   "type": "module",
   "scripts": {
     "dev": "vite dev",

@@ -623,18 +623,20 @@ const hi = {
 };
 
 // Initialize i18n synchronously for SSR
-i18n.use(initReactI18next).init({
-  resources: {
-    en: { translation: en },
-    hi: { translation: hi },
-  },
-  lng: "en",
-  fallbackLng: "en",
-  supportedLngs: ["en", "hi"],
-  interpolation: { escapeValue: false },
-  react: { 
-    useSuspense: false,
-  },
-});
+if (!i18n.isInitialized) {
+  i18n.use(initReactI18next).init({
+    resources: {
+      en: { translation: en },
+      hi: { translation: hi },
+    },
+    lng: "en",
+    fallbackLng: "en",
+    supportedLngs: ["en", "hi"],
+    interpolation: { escapeValue: false },
+    react: { 
+      useSuspense: false,
+    },
+  });
+}
 
 export default i18n;
