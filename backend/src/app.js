@@ -1,4 +1,5 @@
 require("dotenv").config();
+// CORS update for Vercel - v2
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
