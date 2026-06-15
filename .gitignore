@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# Vercel — never commit prebuilt output; let Vercel run the build itself
+.vercel
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
