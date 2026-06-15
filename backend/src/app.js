@@ -32,6 +32,8 @@ global.io = io;
 
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL,
+  "https://journeymate-ai-dgfd.vercel.app",
+  "https://journeymate-ai.vercel.app",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:8080",
