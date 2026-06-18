@@ -181,7 +181,7 @@ function PublishPage() {
                 <Select defaultValue="5" onValueChange={v => setValue("vehicleSeats", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                    {[5,6,7,8,9,10,11,12,13,14,15].map(n => (
                       <SelectItem key={n} value={String(n)}>{n} seats</SelectItem>
                     ))}
                   </SelectContent>

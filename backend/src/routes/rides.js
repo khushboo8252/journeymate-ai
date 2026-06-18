@@ -83,7 +83,7 @@ router.post(
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
-    body("seatsTotal").optional().isInt({ min: 4, max: 15 }).withMessage("Total seats must be between 4 and 15"),
+    body("seatsTotal").optional().isInt({ min: 5, max: 15 }).withMessage("Total seats must be between 5 and 15"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
