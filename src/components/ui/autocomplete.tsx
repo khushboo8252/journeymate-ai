@@ -1,12 +1,12 @@
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
@@ -33,7 +33,6 @@ const cities = [
   "Tehri",
   "Pauri",
   "Rudraprayag",
-  "Chamoli",
   "Karnaprayag",
   "Joshimath",
   "Auli",
@@ -57,34 +56,75 @@ interface AutocompleteProps {
 
 export function Autocomplete({ value, onChange, placeholder, className }: AutocompleteProps) {
   const [open, setOpen] = React.useState(false);
+  const [inputValue, setInputValue] = React.useState(value);
+
+  React.useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  const filteredCities = React.useMemo(() => {
+    if (!inputValue) return cities.slice(0, 5);
+    return cities.filter(city =>
+      city.toLowerCase().includes(inputValue.toLowerCase())
+    ).slice(0, 5);
+  }, [inputValue]);
+
+  const handleSelect = (city: string) => {
+    onChange(city);
+    setInputValue(city);
+    setOpen(false);
+  };
+
+  const handleInputChange = (newValue: string) => {
+    setInputValue(newValue);
+    onChange(newValue);
+    if (newValue.length > 0) {
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  };
+
+  const handleClear = () => {
+    onChange("");
+    setInputValue("");
+    setOpen(false);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn("w-full justify-between", className)}
-        >
-          {value || placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+        <div className={cn("relative", className)}>
+          <Input
+            value={inputValue}
+            onChange={(e) => handleInputChange(e.target.value)}
+            placeholder={placeholder}
+            onFocus={() => inputValue && setOpen(true)}
+            className="pr-8"
+          />
+          {inputValue && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
+              onClick={handleClear}
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          )}
+        </div>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0">
+      <PopoverContent className="w-full p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search city..." />
           <CommandList>
             <CommandEmpty>No city found.</CommandEmpty>
             <CommandGroup>
-              {cities.map((city) => (
+              {filteredCities.map((city) => (
                 <CommandItem
                   key={city}
                   value={city}
-                  onSelect={(currentValue) => {
-                    onChange(currentValue === value ? "" : currentValue);
-                    setOpen(false);
-                  }}
+                  onSelect={() => handleSelect(city)}
                 >
                   <Check
                     className={cn(

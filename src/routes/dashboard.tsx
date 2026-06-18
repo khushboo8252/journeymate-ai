@@ -633,14 +633,19 @@ function DashboardPage() {
 
                 {searched && (
                   <div className="space-y-4">
-                    {searchRides.length === 0 ? (
+                    {searchLoading ? (
+                      <div className="text-center py-16 glass rounded-2xl">
+                        <Loader2 className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3 animate-spin" />
+                        <p className="text-muted-foreground">Loading rides...</p>
+                      </div>
+                    ) : searchRides.length === 0 ? (
                       <div className="text-center py-16 glass rounded-2xl">
                         <Search className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                         <p className="text-muted-foreground">{t("search.no_rides")}</p>
                       </div>
                     ) : (
                       searchRides.map((ride, i) => (
-                        <RideCard 
+                        <RideCard
                           key={ride._id}
                           id={ride._id}
                           origin={ride.origin}
