@@ -498,7 +498,7 @@ function DashboardPage() {
                 </Link>
               )}
               <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
-                <LogOut className="h-4 w-4" />{t("nav.login")}
+                <LogOut className="h-4 w-4" />{t("nav.logout")}
               </Button>
             </div>
           </div>

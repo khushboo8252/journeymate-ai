@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/use-auth";
 import {
   ArrowRight,
   Calendar,
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/")({
 function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState("");
@@ -87,13 +89,13 @@ function Home() {
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-                <Link to="/auth">
+                <Link to={user ? "/dashboard" : "/auth"}>
                   <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-[var(--shadow-glow)] font-semibold text-base h-12 px-8">
                     <Users className="h-5 w-5 mr-2" />
                     Become a Driver
                   </Button>
                 </Link>
-                <Link to="/auth">
+                <Link to={user ? "/dashboard" : "/auth"}>
                   <Button size="lg" variant="outline" className="w-full sm:w-auto font-semibold text-base h-12 px-8 border-primary/40 hover:border-primary/70 hover:bg-primary/10 transition-all">
                     <ArrowRight className="h-5 w-5 mr-2" />
                     Start Your Journey
