@@ -41,28 +41,42 @@ const VEHICLE_LAYOUTS = {
 };
 
 /**
- * Generate seat array for a ride based on vehicle type
+ * Generate seat array for a ride based on vehicle type and custom seat count
  * @param {string} rideId - The ride ID
  * @param {string} vehicleType - The vehicle type (hatchback, sedan, suv, mpv, van)
+ * @param {number} customSeatsTotal - Custom total seats (optional)
  * @returns {Array} Array of seat objects
  */
-const generateSeats = (rideId, vehicleType = 'sedan') => {
+const generateSeats = (rideId, vehicleType = 'sedan', customSeatsTotal = null) => {
   const layout = VEHICLE_LAYOUTS[vehicleType] || VEHICLE_LAYOUTS.sedan;
   const seats = [];
-  
-  layout.layout.forEach((row) => {
-    row.seats.forEach((seat) => {
+  const totalSeats = customSeatsTotal || layout.totalSeats;
+
+  // Generate seats dynamically based on totalSeats
+  const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
+  let seatCounter = 1;
+
+  for (let i = 0; i < rows.length && seatCounter <= totalSeats; i++) {
+    const row = rows[i];
+    const seatsInRow = i === 0 ? 2 : 3; // First row has driver + 1 passenger, others have 3
+
+    for (let j = 0; j < seatsInRow && seatCounter <= totalSeats; j++) {
+      const isDriver = i === 0 && j === 0;
+      const seatType = isDriver ? 'driver' : (j === 0 || j === seatsInRow - 1 ? 'window' : 'middle');
+
       seats.push({
         rideId,
-        seatNumber: `${row.row}${seat.num}`,
-        row: row.row,
-        position: seat.num,
-        type: seat.type,
-        status: seat.type === 'driver' ? 'booked' : 'available'
+        seatNumber: `${row}${j + 1}`,
+        row: row,
+        position: j + 1,
+        type: seatType,
+        status: isDriver ? 'booked' : 'available'
       });
-    });
-  });
-  
+
+      seatCounter++;
+    }
+  }
+
   return seats;
 };
 

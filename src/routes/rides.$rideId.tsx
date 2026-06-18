@@ -28,7 +28,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { SeatPicker, type Seat } from "@/components/seat-picker/SeatPicker";
 
 export const Route = createFileRoute("/rides/$rideId")({
   head: () => ({
@@ -51,25 +50,16 @@ function RideDetailPage() {
 
   const [ride, setRide] = useState<RideWithDriver | null>(null);
   const [loading, setLoading] = useState(true);
-  const [seats, setSeats] = useState<Seat[]>([]);
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
-  const [lockingSeats, setLockingSeats] = useState(false);
-  
+  const [seatsToBook, setSeatsToBook] = useState(1);
+
   // Live location state
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
-  const toggleSeat = (seatNumber: string) => {
-    setSelectedSeats(prev =>
-      prev.includes(seatNumber) ? prev.filter(s => s !== seatNumber) : [...prev, seatNumber]
-    );
-  };
-
   useEffect(() => {
     fetchRide();
-    fetchSeats();
   }, [rideId]);
 
   useEffect(() => {
@@ -192,41 +182,6 @@ function RideDetailPage() {
     setLoading(false);
   };
 
-  const fetchSeats = async () => {
-    try {
-      const data = await api.get<Seat[]>(`/api/rides/${rideId}/seats`);
-      setSeats(data);
-    } catch (error) {
-      console.error("Failed to fetch seats:", error);
-    }
-  };
-
-  const lockSeats = async (seatNumbers: string[]) => {
-    if (!user) return;
-    try {
-      setLockingSeats(true);
-      await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers });
-      // Refresh seats to get updated status
-      await fetchSeats();
-    } catch (error) {
-      console.error("Failed to lock seats:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to lock seats");
-      setSelectedSeats([]);
-    } finally {
-      setLockingSeats(false);
-    }
-  };
-
-  const releaseAllLockedSeats = async () => {
-    if (!user) return;
-    try {
-      await api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats });
-      await fetchSeats();
-    } catch (error) {
-      console.error("Failed to release seats:", error);
-    }
-  };
-
   const checkExistingBooking = async () => {
     if (!user || !ride) return;
     try {
@@ -244,33 +199,27 @@ function RideDetailPage() {
   const bookRide = async () => {
     if (!user) { navigate({ to: "/auth" }); return; }
     if (!ride) return;
-    if (selectedSeats.length === 0) { toast.error(t("ride_details.select_seat_error")); return; }
+    if (seatsToBook < 1) { toast.error("Please select at least 1 seat"); return; }
     setBooking(true);
     try {
-      // First lock the seats (IRCTC style - lock only on book button click)
-      await api.post(`/api/rides/${rideId}/seats/lock`, { seatNumbers: selectedSeats });
-      
       // Create booking (will return payment order)
       const bookingResponse = await api.post<{
         booking: { _id: string };
         paymentOrder?: { keyId: string; amount: number; currency: string; orderId: string };
         requiresPayment: boolean;
         upfrontAmount?: number;
-      }>("/api/bookings", { rideId: ride._id, seatNumbers: selectedSeats });
-      
+      }>("/api/bookings", { rideId: ride._id, seats: seatsToBook });
+
       if (bookingResponse.requiresPayment && bookingResponse.paymentOrder) {
         const paymentOrder = bookingResponse.paymentOrder;
-        
+
         // Check if payment system is configured
         if (!paymentOrder.keyId || paymentOrder.keyId === "your_razorpay_key_id") {
           toast.error("Payment system not configured. Please contact admin.");
-          // Release the locked seats
-          await api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats });
-          fetchSeats();
           setBooking(false);
           return;
         }
-        
+
         // Load Razorpay script dynamically
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -281,7 +230,7 @@ function RideDetailPage() {
             amount: paymentOrder.amount * 100,
             currency: paymentOrder.currency,
             name: "Ukyro",
-            description: `Booking for ${selectedSeats.length} seat(s)`,
+            description: `Booking for ${seatsToBook} seat(s)`,
             order_id: paymentOrder.orderId,
             handler: async function (response: any) {
               try {
@@ -291,17 +240,13 @@ function RideDetailPage() {
                   paymentId: response.razorpay_payment_id,
                   signature: response.razorpay_signature,
                 });
-                toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
+                toast.success(`${seatsToBook} seat${seatsToBook > 1 ? "s" : ""} booked! Have a great journey.`);
                 setAlreadyBooked(true);
-                setSelectedSeats([]);
                 fetchRide();
-                fetchSeats();
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
-                // Release the locked seats on error
-                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-                fetchSeats();
               }
+              setBooking(false);
             },
             prefill: {
               name: user.fullName,
@@ -313,9 +258,7 @@ function RideDetailPage() {
             modal: {
               ondismiss: function() {
                 toast.error("Payment cancelled");
-                // Release the locked seats
-                api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-                fetchSeats();
+                setBooking(false);
               },
             },
           };
@@ -324,31 +267,24 @@ function RideDetailPage() {
             rzp.open();
           } catch (error) {
             toast.error("Failed to initialize payment. Please try again.");
-            // Release the locked seats
-            api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-            fetchSeats();
+            setBooking(false);
           }
         };
         script.onerror = () => {
           toast.error("Failed to load payment gateway. Please check your internet connection.");
-          // Release the locked seats
-          api.post(`/api/rides/${rideId}/seats/release`, { seatNumbers: selectedSeats }).catch(console.error);
-          fetchSeats();
+          setBooking(false);
         };
         document.body.appendChild(script);
       } else {
-        toast.success(`${selectedSeats.length} seat${selectedSeats.length > 1 ? "s" : ""} booked! Have a great journey.`);
+        toast.success(`${seatsToBook} seat${seatsToBook > 1 ? "s" : ""} booked! Have a great journey.`);
         setAlreadyBooked(true);
-        setSelectedSeats([]);
         fetchRide();
-        fetchSeats();
+        setBooking(false);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("ride_details.booking_failed"));
-      // Refresh seats to show current status
-      fetchSeats();
+      setBooking(false);
     }
-    setBooking(false);
   };
 
   if (loading || authLoading) {
@@ -409,25 +345,6 @@ function RideDetailPage() {
 
             {/* ═══ LEFT COLUMN ═══ */}
             <div className="flex-1 min-w-0 space-y-4">
-
-              {/* ── Seat overview card (only for passengers who can book) ── */}
-              {canBook && ride.seatsTotal > 0 && (
-                <div className="glass rounded-2xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-base">{t("ride_details.select_seat")}</h3>
-                    <span className="text-xs text-muted-foreground">
-                      {seats.filter(s => s.status === 'available').length} of {ride.seatsTotal} {t("ride_details.available")}
-                    </span>
-                  </div>
-                  <SeatPicker
-                    rideId={rideId}
-                    seats={seats}
-                    selectedSeats={selectedSeats}
-                    onSeatToggle={toggleSeat}
-                    userId={user?._id}
-                  />
-                </div>
-              )}
 
               {/* ── Route timeline card ── */}
               <div className="glass rounded-2xl p-4 sm:p-6">
@@ -638,38 +555,53 @@ function RideDetailPage() {
 
                   {canBook && (
                     <>
-                      {/* Seat count + price row */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          {selectedSeats.length === 0 ? (
-                            <span className="text-amber-400 text-xs">{t("ride_details.select_seats_hint")}</span>
-                          ) : (
-                            <span>
-                              <span className="font-semibold text-foreground">{selectedSeats.length}</span>
-                              {" "}{t("ride_details.passenger")}
-                            </span>
-                          )}
+                      {/* Seat count selector */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Number of seats</span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSeatsToBook(Math.max(1, seatsToBook - 1))}
+                              disabled={seatsToBook <= 1}
+                            >
+                              -
+                            </Button>
+                            <span className="font-semibold w-8 text-center">{seatsToBook}</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSeatsToBook(Math.min(ride.seatsAvailable, seatsToBook + 1))}
+                              disabled={seatsToBook >= ride.seatsAvailable}
+                            >
+                              +
+                            </Button>
+                          </div>
                         </div>
-                        {selectedSeats.length > 0 && (
+
+                        {/* Price display */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Total price</span>
                           <div className="flex items-baseline gap-0.5 font-bold text-lg sm:text-xl">
                             <IndianRupee className="h-4 w-4" />
-                            {(Number(ride.pricePerSeat) * selectedSeats.length).toLocaleString("en-IN")}
+                            {(Number(ride.pricePerSeat) * seatsToBook).toLocaleString("en-IN")}
                             <span className="text-xs font-normal text-muted-foreground">.00</span>
                           </div>
-                        )}
+                        </div>
                       </div>
 
                       {/* Book button */}
                       <Button
                         onClick={bookRide}
-                        disabled={booking || selectedSeats.length === 0}
+                        disabled={booking}
                         className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-10 sm:h-11 rounded-full text-sm sm:text-base shadow-lg shadow-primary/30 disabled:opacity-40"
                       >
                         {booking
                           ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                          : selectedSeats.length === 0
-                          ? t("ride_details.select_seats_to_book")
-                          : <><Zap className="h-4 w-4 mr-1.5" />{t("ride_details.book")} {selectedSeats.length} {t("ride_details.seat")}</>}
+                          : <><Zap className="h-4 w-4 mr-1.5" />{t("ride_details.book")} {seatsToBook} {seatsToBook > 1 ? t("ride_details.seats") : t("ride_details.seat")}</>}
                       </Button>
                     </>
                   )}

@@ -96,13 +96,13 @@ router.post(
       // Check if driver is approved by admin
       const driver = await User.findById(req.user._id);
       if (!driver.isApproved) {
-        return res.status(403).json({ 
-          message: "Your account is pending admin approval. You cannot publish rides until approved." 
+        return res.status(403).json({
+          message: "Your account is pending admin approval. You cannot publish rides until approved."
         });
       }
 
-      // Get total seats based on vehicle type
-      const seatsTotal = getTotalSeats(vehicleType);
+      // Use user-selected seatsTotal from request body
+      const seatsTotal = Number(req.body.seatsTotal) || getTotalSeats(vehicleType);
 
       const ride = await Ride.create({
         driverId: req.user._id,
@@ -117,8 +117,8 @@ router.post(
         vehicleType,
       });
 
-      // Auto-generate seats for the ride
-      const seatData = generateSeats(ride._id, vehicleType);
+      // Auto-generate seats for the ride based on user-selected total
+      const seatData = generateSeats(ride._id, vehicleType, seatsTotal);
       await Seat.insertMany(seatData);
 
       // Emit real-time event for new ride
