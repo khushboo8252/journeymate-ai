@@ -112,7 +112,10 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
             <Button
               size="sm"
               className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20 whitespace-nowrap shrink-0"
-              onClick={e => e.stopPropagation()}
+              onClick={e => {
+                e.stopPropagation();
+                navigate({ to: "/rides/$rideId", params: { rideId: id } });
+              }}
             >
               View ride
             </Button>
