@@ -457,9 +457,9 @@ function DashboardPage() {
           {/* Profile header */}
           <div className="glass rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center gap-5">
             <Avatar className="h-16 w-16 border-2 border-primary/30">
-              <AvatarImage src={user.avatarUrl ?? undefined} />
+              <AvatarImage src={(user as any).avatarUrl || undefined} alt={fullName || "User"} />
               <AvatarFallback className="text-xl bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
-                {initials}
+                {fullName ? fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 text-center sm:text-left">
@@ -498,7 +498,7 @@ function DashboardPage() {
                 </Link>
               )}
               <Button variant="outline" size="sm" onClick={signOut} className="flex items-center gap-2">
-                <LogOut className="h-4 w-4" />{t("nav.logout")}
+                <LogOut className="h-4 w-4" />{t("logout")}
               </Button>
             </div>
           </div>
