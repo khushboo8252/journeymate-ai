@@ -489,7 +489,7 @@ function DashboardPage() {
                   </Button>
                 </Link>
               )}
-              {isDriver && (user as any).isProfileComplete && (
+              {isDriver && (user as any).isProfileComplete && (user as any).isApproved && (
                 <Link to="/publish">
                   <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold">
                     <Car className="h-4 w-4 mr-1.5" />Publish Ride
@@ -674,19 +674,26 @@ function DashboardPage() {
             <TabsContent value="rides" className="space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <p className="text-sm text-muted-foreground">{t("dashboard.my_rides")}</p>
-                <Link to="/publish" className="w-full sm:w-auto">
-                  <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
-                    <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
-                  </Button>
-                </Link>
+                {isDriver && (user as any).isApproved && (
+                  <Link to="/publish" className="w-full sm:w-auto">
+                    <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
+                      <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
+                    </Button>
+                  </Link>
+                )}
               </div>
               {myRides.length === 0 && (
                 <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Car className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">{t("dashboard.no_rides_desc")}</p>
-                  <Link to="/publish" className="mt-4 inline-block">
-                    <Button size="sm" variant="outline">{t("dashboard.publish_ride")}</Button>
-                  </Link>
+                  {isDriver && (user as any).isApproved && (
+                    <Link to="/publish" className="mt-4 inline-block">
+                      <Button size="sm" variant="outline">{t("dashboard.publish_ride")}</Button>
+                    </Link>
+                  )}
+                  {isDriver && !(user as any).isApproved && (
+                    <p className="text-xs text-muted-foreground mt-4">Your account is pending admin approval to publish rides.</p>
+                  )}
                 </div>
               )}
               {myRides.map(ride => (

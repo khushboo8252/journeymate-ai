@@ -88,6 +88,42 @@ function PublishPage() {
     );
   }
 
+  // Check if user is a driver and if they are approved
+  if (user.role === "driver" && !user.isApproved) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center px-4 py-24">
+          <div className="glass rounded-2xl p-10 text-center max-w-sm w-full">
+            <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Account Pending Approval</h2>
+            <p className="text-muted-foreground mb-6">Your driver account is pending admin approval. You cannot publish rides until approved.</p>
+            <Link to="/dashboard"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">Go to Dashboard</Button></Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Check if user is a passenger (passengers cannot publish rides)
+  if (user.role === "passenger") {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center px-4 py-24">
+          <div className="glass rounded-2xl p-10 text-center max-w-sm w-full">
+            <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Driver Account Required</h2>
+            <p className="text-muted-foreground mb-6">Only drivers can publish rides. Please register as a driver to publish rides.</p>
+            <Link to="/dashboard"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">Go to Dashboard</Button></Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />

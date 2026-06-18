@@ -59,8 +59,12 @@ function SignInForm() {
       setToken(data.token);
       setUser(data.user);
       toast.success(t("auth.welcome_back"));
-      // All users (including drivers) go directly to dashboard after login
-      navigate({ to: "/dashboard" });
+      // If user is a driver and is approved, redirect to publish page
+      if (data.user.role === "driver" && data.user.isApproved) {
+        navigate({ to: "/publish" });
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("auth.signin_failed"));
     }

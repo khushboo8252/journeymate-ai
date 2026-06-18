@@ -3,6 +3,7 @@ const { body, validationResult } = require("express-validator");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
 const Seat = require("../models/Seat");
+const User = require("../models/User");
 const { protect, restrictTo } = require("../middleware/auth");
 const { generateSeats, getTotalSeats } = require("../utils/seatGenerator");
 const { createRemainingPaymentOrder, processRemainingPayment } = require("../services/paymentService");
@@ -92,6 +93,14 @@ router.post(
     const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan" } = req.body;
 
     try {
+      // Check if driver is approved by admin
+      const driver = await User.findById(req.user._id);
+      if (!driver.isApproved) {
+        return res.status(403).json({ 
+          message: "Your account is pending admin approval. You cannot publish rides until approved." 
+        });
+      }
+
       // Get total seats based on vehicle type
       const seatsTotal = getTotalSeats(vehicleType);
 
