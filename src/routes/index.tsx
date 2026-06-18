@@ -18,6 +18,7 @@ import { Footer } from "@/components/site/Footer";
 import { AnimatedBackground } from "@/components/site/AnimatedBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import heroVideo from "@/assets/5379992-uhd_3840_2160_24fps.mp4";
 
 export const Route = createFileRoute("/")({
@@ -110,8 +111,20 @@ function Home() {
             >
               <div className="glass rounded-2xl p-3 md:p-4 shadow-[var(--shadow-elegant)]">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                  <SearchField icon={MapPin} label={t("search.from")} placeholder={t("search.from_ph")} value={from} onChange={setFrom} className="md:col-span-4" />
-                  <SearchField icon={MapPin} label={t("search.to")} placeholder={t("search.to_ph")} value={to} onChange={setTo} className="md:col-span-4" />
+                  <div className="md:col-span-4">
+                    <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
+                      <MapPin className="h-3 w-3" />
+                      {t("search.from")}
+                    </label>
+                    <Autocomplete value={from} onChange={setFrom} placeholder={t("search.from_ph")} className="w-full" />
+                  </div>
+                  <div className="md:col-span-4">
+                    <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
+                      <MapPin className="h-3 w-3" />
+                      {t("search.to")}
+                    </label>
+                    <Autocomplete value={to} onChange={setTo} placeholder={t("search.to_ph")} className="w-full" />
+                  </div>
                   <SearchField icon={Calendar} label={t("search.date")} placeholder="DD / MM" type="date" value={date} onChange={setDate} className="md:col-span-2" />
                   <div className="md:col-span-2">
                     <Button onClick={handleSearch} className="w-full h-full min-h-12 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-lg shadow-primary/40 font-semibold">

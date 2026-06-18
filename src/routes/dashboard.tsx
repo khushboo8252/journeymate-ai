@@ -41,6 +41,7 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiBooking, ApiUser } from "@/lib/api";
@@ -596,31 +597,19 @@ function DashboardPage() {
               <TabsContent value="search" className="space-y-4">
                 <div className="glass rounded-2xl p-4 sm:p-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
-                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
                         <MapPin className="h-3 w-3" />
                         {t("search.from")}
                       </label>
-                      <Input
-                        type="text"
-                        placeholder={t("search.from_ph")}
-                        value={searchFrom}
-                        onChange={e => setSearchFrom(e.target.value)}
-                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
-                      />
+                      <Autocomplete value={searchFrom} onChange={setSearchFrom} placeholder={t("search.from_ph")} className="w-full" />
                     </div>
-                    <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2">
-                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
                         <MapPin className="h-3 w-3" />
                         {t("search.to")}
                       </label>
-                      <Input
-                        type="text"
-                        placeholder={t("search.to_ph")}
-                        value={searchTo}
-                        onChange={e => setSearchTo(e.target.value)}
-                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
-                      />
+                      <Autocomplete value={searchTo} onChange={setSearchTo} placeholder={t("search.to_ph")} className="w-full" />
                     </div>
                     <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2 sm:col-span-2 lg:col-span-1">
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
