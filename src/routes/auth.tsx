@@ -177,6 +177,26 @@ function SignUpForm() {
 
 function AuthPage() {
   const { t } = useTranslation();
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect to dashboard if already logged in
+  if (!loading && user) {
+    navigate({ to: "/dashboard" });
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />

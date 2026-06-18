@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import "@/i18n";
 import { LayoutDashboard, LogOut, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +47,7 @@ export function Header() {
                 <DropdownMenuTrigger asChild>
                   <button className="rounded-full ring-2 ring-primary/30 hover:ring-primary/60 transition-all">
                     <Avatar className="h-8 w-8">
+                      <AvatarImage src={user.avatarUrl || undefined} alt={user.fullName} />
                       <AvatarFallback className="text-xs bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
                         {initials}
                       </AvatarFallback>

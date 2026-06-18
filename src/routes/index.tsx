@@ -75,11 +75,6 @@ function Home() {
               transition={{ duration: 0.6 }}
               className="max-w-3xl mx-auto text-center"
             >
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs font-medium mb-6 animate-glow-pulse">
-                <Sparkles className="h-3.5 w-3.5 text-accent" />
-                <span className="shimmer-text">{t("hero.badge")}</span>
-              </div>
-
               <h1 className="text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight">
                 {t("hero.title_a")}
                 <br />
@@ -130,8 +125,8 @@ function Home() {
               {/* Stats */}
               <div className="mt-10 grid grid-cols-3 gap-4 max-w-2xl mx-auto">
                 {[
-                  { v: "2M+", l: "Travelers" },
-                  { v: "50K+", l: "Daily rides" },
+                  { v: "1000+", l: "Travelers" },
+                  { v: "100K+", l: "Daily rides" },
                   { v: "4.8★", l: "Avg rating" },
                 ].map((s) => (
                   <div key={s.l} className="text-center">
