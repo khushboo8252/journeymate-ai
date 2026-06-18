@@ -81,7 +81,7 @@ function Home() {
                 <span className="text-gradient">{t("hero.title_b")}</span>
               </h1>
 
-              <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              <p className="mt-6 text-lg md:text-xl text-black max-w-2xl mx-auto leading-relaxed">
                 {t("hero.subtitle")}
               </p>
 
