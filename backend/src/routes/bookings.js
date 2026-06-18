@@ -39,13 +39,13 @@ router.get("/my", protect, async (req, res) => {
   }
 });
 
-// POST /api/bookings — book seats using seat numbers (creates pending booking)
+// POST /api/bookings — book seats using seat count (creates pending booking)
 router.post(
   "/",
   protect,
   [
     body("rideId").notEmpty().withMessage("Ride ID is required"),
-    body("seatNumbers").isArray({ min: 1 }).withMessage("At least 1 seat number required"),
+    body("seats").isInt({ min: 1, max: 15 }).withMessage("Seats must be between 1 and 15"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -53,7 +53,7 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { rideId, seatNumbers } = req.body;
+    const { rideId, seats } = req.body;
     const userId = req.user._id;
 
     try {
@@ -66,47 +66,21 @@ router.post(
         return res.status(400).json({ message: "You cannot book your own ride." });
       }
 
-      // Validate that all requested seats are locked by this user
-      const seats = await Seat.find({
-        rideId,
-        seatNumber: { $in: seatNumbers }
-      });
-
-      if (seats.length !== seatNumbers.length) {
-        return res.status(400).json({ message: "Some seats do not exist." });
-      }
-
-      const invalidSeats = seats.filter(seat => 
-        seat.status !== 'locked' || seat.lockedBy?.toString() !== userId.toString()
-      );
-
-      if (invalidSeats.length > 0) {
-        return res.status(400).json({ 
-          message: "Some seats are not available or locked by another user.",
-          invalidSeats: invalidSeats.map(s => s.seatNumber)
-        });
-      }
-
-      // Check for lock expiry
-      const expiredSeats = seats.filter(seat => seat.hasLockExpired());
-      if (expiredSeats.length > 0) {
-        return res.status(400).json({ 
-          message: "Some seat locks have expired. Please select seats again.",
-          expiredSeats: expiredSeats.map(s => s.seatNumber)
-        });
+      // Check if enough seats are available
+      if (ride.seatsAvailable < seats) {
+        return res.status(400).json({ message: `Only ${ride.seatsAvailable} seats available.` });
       }
 
       // Create pending booking
       const booking = await Booking.create({
         rideId,
         passengerId: userId,
-        seats: seatNumbers.length,
-        seatNumbers: seatNumbers,
+        seats: seats,
         status: "pending_payment"
       });
 
       // Create upfront payment order (25% of total fare for booked seats)
-      const paymentOrder = await createUpfrontPaymentOrder(rideId, userId, seatNumbers.length);
+      const paymentOrder = await createUpfrontPaymentOrder(rideId, userId, seats);
 
       res.status(201).json({
         booking,
@@ -152,17 +126,13 @@ router.post(
       // Process upfront payment
       await processUpfrontPayment(booking.rideId, paymentId, signature, userId);
 
-      // Convert locked seats to booked
-      await Seat.bookSeats(booking.rideId, booking.seatNumbers, userId, booking._id);
-
       // Update booking status
       booking.status = "confirmed";
       await booking.save();
 
       // Update ride seatsAvailable
       const ride = await Ride.findById(booking.rideId);
-      const seatCounts = await Seat.getSeatCounts(booking.rideId);
-      ride.seatsAvailable = seatCounts.available;
+      ride.seatsAvailable = Math.max(0, ride.seatsAvailable - booking.seats);
       await ride.save();
 
       // Emit real-time events
@@ -204,25 +174,15 @@ router.patch("/:id/cancel", protect, async (req, res) => {
     booking.status = "cancelled";
     await booking.save();
 
-    // Release seats back to available
-    if (booking.seatNumbers && booking.seatNumbers.length > 0) {
-      await Seat.releaseBookedSeats(booking.rideId, booking.seatNumbers);
-    }
-
     // Update ride seatsAvailable
     const ride = await Ride.findById(booking.rideId);
     if (ride) {
-      const seatCounts = await Seat.getSeatCounts(booking.rideId);
-      ride.seatsAvailable = seatCounts.available;
+      ride.seatsAvailable = Math.min(ride.seatsTotal, ride.seatsAvailable + booking.seats);
       await ride.save();
 
       // Emit real-time events
       global.io.to(`user_${req.user._id}`).emit("booking_cancelled", booking);
       global.io.to(`driver_${ride.driverId}`).emit("booking_cancelled", booking);
-      global.io.to(`ride_${booking.rideId}`).emit("seat_released", {
-        rideId: booking.rideId,
-        seatNumbers: booking.seatNumbers || []
-      });
       global.io.emit("ride_updated", ride);
     }
 
