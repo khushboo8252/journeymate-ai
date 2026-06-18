@@ -15,7 +15,7 @@ const en = {
     badge: "AI-powered carpooling, reimagined",
     title_a: "Share the road.",
     title_b: "Save the planet.",
-    subtitle: "Find affordable rides across India in seconds. Trusted drivers, transparent prices, and zero hassle — wherever the road takes you.",
+    subtitle: "Find affordable rides across Uttarakhand in seconds. Trusted drivers, transparent prices, genuine passengers — wherever the road takes you.",
     cta_search: "Find a ride",
     cta_publish: "Offer a seat",
   },
