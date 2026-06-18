@@ -52,15 +52,26 @@ function PublishPage() {
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
     try {
+      const seatCount = Number(values.vehicleSeats);
+      // Determine vehicle type based on seat count
+      let vehicleType = "sedan";
+      if (seatCount >= 8) {
+        vehicleType = "van";
+      } else if (seatCount >= 6) {
+        vehicleType = "suv";
+      } else if (seatCount === 4) {
+        vehicleType = "hatchback";
+      }
+
       await api.post("/api/rides", {
         origin: values.origin,
         destination: values.destination,
         departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
         arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
-        seatsTotal: Number(values.vehicleSeats),
-        seatsAvailable: Number(values.vehicleSeats),
+        seatsTotal: seatCount,
         pricePerSeat: Number(values.price),
         description: values.description || null,
+        vehicleType,
       });
       toast.success(t("publish.success"));
       navigate({ to: "/dashboard" });

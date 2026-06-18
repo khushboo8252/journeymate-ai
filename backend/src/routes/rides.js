@@ -83,6 +83,7 @@ router.post(
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
+    body("seatsTotal").optional().isInt({ min: 4, max: 15 }).withMessage("Total seats must be between 4 and 15"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -90,7 +91,7 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan" } = req.body;
+    const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan", seatsTotal } = req.body;
 
     try {
       // Check if driver is approved by admin
@@ -101,8 +102,8 @@ router.post(
         });
       }
 
-      // Use user-selected seatsTotal from request body
-      const seatsTotal = Number(req.body.seatsTotal) || getTotalSeats(vehicleType);
+      // Use user-selected seatsTotal or fallback to vehicle type default
+      const finalSeatsTotal = seatsTotal ? Number(seatsTotal) : getTotalSeats(vehicleType);
 
       const ride = await Ride.create({
         driverId: req.user._id,
@@ -110,15 +111,15 @@ router.post(
         destination,
         departureAt: new Date(departureAt),
         arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
-        seatsTotal,
-        seatsAvailable: seatsTotal - 1, // Minus driver seat
+        seatsTotal: finalSeatsTotal,
+        seatsAvailable: finalSeatsTotal, // All seats available for passengers
         pricePerSeat: Number(pricePerSeat),
         description: description || null,
         vehicleType,
       });
 
       // Auto-generate seats for the ride based on user-selected total
-      const seatData = generateSeats(ride._id, vehicleType, seatsTotal);
+      const seatData = generateSeats(ride._id, vehicleType, finalSeatsTotal);
       await Seat.insertMany(seatData);
 
       // Emit real-time event for new ride
