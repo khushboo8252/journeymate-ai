@@ -61,7 +61,8 @@ function DriverSetupPage() {
   const [aadharCardBack, setAadharCardBack] = useState<File | null>(null);
   const [panCardFront, setPanCardFront] = useState<File | null>(null);
   const [rcFront, setRcFront] = useState<File | null>(null);
-  const [rcBack, setRcBack] = useState<File | null>(null);
+  const [insurance, setInsurance] = useState<File | null>(null);
+  const [pollution, setPollution] = useState<File | null>(null);
   const [vehicleImage, setVehicleImage] = useState<File | null>(null);
 
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
@@ -104,6 +105,44 @@ function DriverSetupPage() {
     reader.readAsDataURL(file);
   };
 
+  const compressImage = async (file: File, maxWidth: number = 1200, quality: number = 0.7): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+              } else {
+                resolve(file);
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+      };
+    });
+  };
+
   const handleDocumentUpload = async (file: File, type: string, side: string = "front") => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
@@ -111,13 +150,17 @@ function DriverSetupPage() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("document", file);
-    formData.append("type", type);
-    if (side) formData.append("side", side);
-
     try {
       setUploadingDoc(`${type}-${side}`);
+      
+      // Compress image before upload
+      const compressedFile = await compressImage(file, 1200, 0.7);
+      
+      const formData = new FormData();
+      formData.append("document", compressedFile);
+      formData.append("type", type);
+      if (side) formData.append("side", side);
+
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/upload/document`, {
         method: "POST",
         headers: {
@@ -148,7 +191,8 @@ function DriverSetupPage() {
         aadharBack,
         pan,
         rcFrontDoc,
-        rcBackDoc,
+        insuranceDoc,
+        pollutionDoc,
         vehicleImg,
       ] = await Promise.all([
         drivingLicenseFront ? handleDocumentUpload(drivingLicenseFront, "drivingLicense", "front") : Promise.resolve(null),
@@ -157,7 +201,8 @@ function DriverSetupPage() {
         aadharCardBack ? handleDocumentUpload(aadharCardBack, "aadharCard", "back") : Promise.resolve(null),
         panCardFront ? handleDocumentUpload(panCardFront, "panCard", "front") : Promise.resolve(null),
         rcFront ? handleDocumentUpload(rcFront, "rc", "front") : Promise.resolve(null),
-        rcBack ? handleDocumentUpload(rcBack, "rc", "back") : Promise.resolve(null),
+        insurance ? handleDocumentUpload(insurance, "insurance", "front") : Promise.resolve(null),
+        pollution ? handleDocumentUpload(pollution, "pollution", "front") : Promise.resolve(null),
         vehicleImage ? handleDocumentUpload(vehicleImage, "vehicleImage", "front") : Promise.resolve(null),
       ]);
 
@@ -184,8 +229,16 @@ function DriverSetupPage() {
       const rc = {
         frontUrl: rcFrontDoc?.url || null,
         frontPublicId: rcFrontDoc?.publicId || null,
-        backUrl: rcBackDoc?.url || null,
-        backPublicId: rcBackDoc?.publicId || null,
+      };
+
+      const insuranceData = {
+        url: insuranceDoc?.url || null,
+        publicId: insuranceDoc?.publicId || null,
+      };
+
+      const pollutionData = {
+        url: pollutionDoc?.url || null,
+        publicId: pollutionDoc?.publicId || null,
       };
 
       const vehicleImageData = {
@@ -206,7 +259,9 @@ function DriverSetupPage() {
       if (drivingLicenseFront || drivingLicenseBack) payload.drivingLicense = drivingLicense;
       if (aadharCardFront || aadharCardBack) payload.aadharCard = aadharCard;
       if (panCardFront) payload.panCard = panCard;
-      if (rcFront || rcBack) payload.rc = rc;
+      if (rcFront) payload.rc = rc;
+      if (insurance) payload.insurance = insuranceData;
+      if (pollution) payload.pollution = pollutionData;
       if (vehicleImage) payload.vehicleImage = vehicleImageData;
 
       const data = await api.put<{ status: string; user: ApiUser; requiresApproval: boolean }>("/api/profile/driver", payload);
@@ -514,27 +569,45 @@ function DriverSetupPage() {
               {/* RC */}
               <div className="space-y-3">
                 <Label className="font-medium">{t("driver_setup.rc")}</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Front side</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setRcFront(e.target.files?.[0] || null)}
-                      className="mt-1"
-                    />
-                    {uploadingDoc === "rc-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Back side</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setRcBack(e.target.files?.[0] || null)}
-                      className="mt-1"
-                    />
-                    {uploadingDoc === "rc-back" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
-                  </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Front side</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setRcFront(e.target.files?.[0] || null)}
+                    className="mt-1"
+                  />
+                  {uploadingDoc === "rc-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
+                </div>
+              </div>
+
+              {/* Insurance */}
+              <div className="space-y-3">
+                <Label className="font-medium">Insurance Certificate</Label>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Upload insurance document</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setInsurance(e.target.files?.[0] || null)}
+                    className="mt-1"
+                  />
+                  {uploadingDoc === "insurance-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
+                </div>
+              </div>
+
+              {/* Pollution */}
+              <div className="space-y-3">
+                <Label className="font-medium">Pollution Certificate</Label>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Upload pollution certificate</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setPollution(e.target.files?.[0] || null)}
+                    className="mt-1"
+                  />
+                  {uploadingDoc === "pollution-front" && <p className="text-xs text-muted-foreground mt-1">{t("driver_setup.uploading")}</p>}
                 </div>
               </div>
             </div>
