@@ -9,10 +9,10 @@ export function Footer() {
     <footer className="border-t border-border/40 mt-24">
       <div className="container mx-auto px-4 md:px-6 py-12">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-center gap-2">
             <img src={logoImg} alt="Logo" className="h-8 object-contain" />
-            <div>
-              <div className="font-bold">Uk<span className="text-gradient">yro</span></div>
+            <div className="text-center">
+              <div className="font-bold text-gray-600">Uk<span className="text-yellow-500">yro</span></div>
               <div className="text-xs text-muted-foreground">{t("footer.tagline")}</div>
             </div>
           </div>
