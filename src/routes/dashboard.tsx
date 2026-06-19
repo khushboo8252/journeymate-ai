@@ -299,8 +299,9 @@ function DashboardPage() {
       toast.success("Profile updated!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const cancelRide = async (id: string) => {

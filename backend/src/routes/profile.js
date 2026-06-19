@@ -38,7 +38,7 @@ router.put(
           ...(avatarUrl !== undefined && { avatarUrl }),
           ...(avatarPublicId !== undefined && { avatarPublicId }),
         },
-        { new: true, runValidators: true }
+        { new: true }
       );
       res.json({ status: "success", user: user.toPublic() });
     } catch (err) {
@@ -99,7 +99,7 @@ router.put(
           isProfileComplete: true,
           isApproved: false, // Requires admin approval
         },
-        { new: true, runValidators: true }
+        { new: true }
       );
 
       // Send email notification to admin
