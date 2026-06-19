@@ -18,6 +18,7 @@ import {
   LogOut,
   MapPin,
   Phone,
+  Plus,
   Search,
   XCircle,
   ShieldCheck,
@@ -545,6 +546,13 @@ function DashboardPage() {
 
           <Tabs defaultValue={isDriver ? "rides" : (!isDriver ? "search" : "bookings")}>
             <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1 w-full sm:w-auto">
+              {isDriver && (
+                <Link to="/publish">
+                  <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold">
+                    <Plus className="h-4 w-4 mr-1.5" />Publish Ride
+                  </Button>
+                </Link>
+              )}
               {!isDriver && (
                 <TabsTrigger value="search" className="flex items-center gap-1.5 text-sm sm:text-base"><Search className="h-4 w-4" />{t("nav.search")}</TabsTrigger>
               )}
