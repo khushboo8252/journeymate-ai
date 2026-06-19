@@ -28,10 +28,7 @@ export function Header() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
         <Link to="/" className="flex items-center gap-2 group">
           <div className="relative">
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-[var(--neon-cyan)] to-[var(--neon-magenta)] blur-md opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative flex h-16 w-32 items-center justify-center rounded-lg bg-background border border-border/60 overflow-hidden">
-              <img src={logoImg} alt="Logo" className="h-full w-full object-cover" />
-            </div>
+            <img src={logoImg} alt="Logo" className="h-16 w-32 object-cover" />
           </div>
         </Link>
 
