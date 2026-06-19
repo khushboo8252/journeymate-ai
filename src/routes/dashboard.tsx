@@ -364,6 +364,14 @@ function DashboardPage() {
     setShowApprovalPopup(false);
   };
 
+  // Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+  const calculateFinalPrice = (basePrice: number): number => {
+    const platformFee = basePrice * 0.05; // 5%
+    const afterFee = basePrice + platformFee;
+    const gst = afterFee * 0.0952; // 9.52%
+    return afterFee + gst;
+  };
+
   const handleSearch = async () => {
     setSearchLoading(true);
     setSearched(true);
@@ -658,7 +666,7 @@ function DashboardPage() {
                       </div>
                       <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
-                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/{t("ride_details.seat")}</span>
+                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{Math.round(calculateFinalPrice(ride.pricePerSeat))}/{t("ride_details.seat")}</span>
                         <span>{ride.seatsAvailable}/{ride.seatsTotal} {t("ride_details.seats_available")}</span>
                       </div>
                     </div>
@@ -770,7 +778,7 @@ function DashboardPage() {
                           <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""}</span>
                           {ride && (
                             <span className="flex items-center gap-1">
-                              <IndianRupee className="h-3 w-3" />{ride.pricePerSeat * booking.seats} total
+                              <IndianRupee className="h-3 w-3" />{Math.round(calculateFinalPrice(ride.pricePerSeat) * booking.seats)} total
                             </span>
                           )}
                         </div>

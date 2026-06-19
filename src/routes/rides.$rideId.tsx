@@ -53,6 +53,7 @@ function RideDetailPage() {
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
   const [seatsToBook, setSeatsToBook] = useState(1);
+  const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("online");
 
   // Live location state
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -170,6 +171,14 @@ function RideDetailPage() {
     } catch {
       setAlreadyBooked(false);
     }
+  };
+
+  // Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+  const calculateFinalPrice = (basePrice: number): number => {
+    const platformFee = basePrice * 0.05; // 5%
+    const afterFee = basePrice + platformFee;
+    const gst = afterFee * 0.0952; // 9.52%
+    return afterFee + gst;
   };
 
   const bookRide = async () => {
@@ -558,12 +567,12 @@ function RideDetailPage() {
                           </div>
                         </div>
 
-                        {/* Price display */}
+                        {/* Price display - only GST amount */}
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Total price</span>
+                          <span className="text-sm text-muted-foreground">GST (9.52%)</span>
                           <div className="flex items-baseline gap-0.5 font-bold text-lg sm:text-xl">
                             <IndianRupee className="h-4 w-4" />
-                            {(Number(ride.pricePerSeat) * seatsToBook).toLocaleString("en-IN")}
+                            {Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}
                             <span className="text-xs font-normal text-muted-foreground">.00</span>
                           </div>
                         </div>
@@ -604,20 +613,86 @@ function RideDetailPage() {
                         )}
                       </div>
                       {!ride.confirmByPassenger && (
-                        <Button
-                          onClick={async () => {
-                            try {
-                              await api.patch(`/api/rides/${rideId}/confirm/passenger`);
-                              toast.success(t("ride_details.ride_completed"));
-                              fetchRide();
-                            } catch (err) {
-                              toast.error(err instanceof Error ? err.message : "Failed to confirm");
-                            }
-                          }}
-                          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
-                        >
-                          {t("ride_details.confirm_button")}
-                        </Button>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => setPaymentMethod("online")}
+                              variant={paymentMethod === "online" ? "default" : "outline"}
+                              className="flex-1"
+                            >
+                              <IndianRupee className="h-4 w-4 mr-2" />Online
+                            </Button>
+                            <Button
+                              onClick={() => setPaymentMethod("cash")}
+                              variant={paymentMethod === "cash" ? "default" : "outline"}
+                              className="flex-1"
+                            >
+                              Cash
+                            </Button>
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              try {
+                                // First confirm completion
+                                await api.patch(`/api/rides/${rideId}/confirm/passenger`);
+                                
+                                if (paymentMethod === "online") {
+                                  // Then trigger remaining payment
+                                  const paymentResponse = await api.post<{
+                                    orderId: string;
+                                    amount: number;
+                                    currency: string;
+                                    keyId: string;
+                                  }>(`/api/rides/${rideId}/remaining-payment`, {});
+                                  
+                                  // Open Razorpay for remaining payment
+                                  const options = {
+                                    key: paymentResponse.keyId,
+                                    amount: paymentResponse.amount,
+                                    currency: paymentResponse.currency,
+                                    name: "Ukyro",
+                                    description: "Remaining payment for ride",
+                                    order_id: paymentResponse.orderId,
+                                    handler: async function (response: any) {
+                                      try {
+                                        await api.post(`/api/rides/${rideId}/remaining-payment/verify`, {
+                                          paymentId: response.razorpay_payment_id,
+                                          signature: response.razorpay_signature,
+                                        });
+                                        toast.success(t("ride_details.ride_completed"));
+                                        fetchRide();
+                                      } catch (err) {
+                                        toast.error(err instanceof Error ? err.message : "Payment verification failed");
+                                      }
+                                    },
+                                    modal: {
+                                      ondismiss: function() {
+                                        toast.error("Payment cancelled");
+                                        fetchRide();
+                                      },
+                                    },
+                                  };
+                                  try {
+                                    const rzp = new (window as any).Razorpay(options);
+                                    rzp.open();
+                                  } catch (err) {
+                                    toast.error("Failed to open payment gateway");
+                                  }
+                                } else {
+                                  // Cash payment - mark as completed without payment
+                                  await api.post(`/api/rides/${rideId}/remaining-payment/cash`, {});
+                                  toast.success(t("ride_details.ride_completed"));
+                                  fetchRide();
+                                }
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Failed to confirm");
+                              }
+                            }}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
+                          >
+                            {t("ride_details.confirm_button")}
+                          </Button>
+                        </div>
                       )}
                     </div>
                   )}

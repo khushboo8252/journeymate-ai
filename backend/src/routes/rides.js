@@ -632,6 +632,139 @@ router.patch("/:id/confirm/passenger", protect, async (req, res) => {
   }
 });
 
+// POST /api/rides/:id/remaining-payment — Create order for remaining payment
+router.post("/:id/remaining-payment", protect, async (req, res) => {
+  const { createRemainingPaymentOrder } = require("../services/paymentService");
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+
+    // Check if user is a passenger on this ride
+    const booking = await Booking.findOne({ rideId, passengerId: userId, status: "confirmed" });
+    if (!booking) {
+      return res.status(403).json({ message: "You are not a passenger on this ride." });
+    }
+
+    if (ride.paymentStatus !== "PARTIAL_PAID") {
+      return res.status(400).json({ message: "Ride payment status is not eligible for remaining payment." });
+    }
+
+    const order = await createRemainingPaymentOrder(rideId, userId);
+    res.json(order);
+  } catch (err) {
+    console.error("Create remaining payment order error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/rides/:id/remaining-payment/verify — Verify remaining payment
+router.post("/:id/remaining-payment/verify", protect, async (req, res) => {
+  const { processRemainingPayment } = require("../services/paymentService");
+  const rideId = req.params.id;
+  const userId = req.user._id;
+  const { paymentId, signature } = req.body;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+
+    // Check if user is a passenger on this ride
+    const booking = await Booking.findOne({ rideId, passengerId: userId, status: "confirmed" });
+    if (!booking) {
+      return res.status(403).json({ message: "You are not a passenger on this ride." });
+    }
+
+    const result = await processRemainingPayment(rideId, paymentId, signature, userId);
+    res.json({ success: true, ride: result.ride, driverEarning: result.driverEarning });
+  } catch (err) {
+    console.error("Verify remaining payment error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/rides/:id/remaining-payment/cash — Process cash payment
+router.post("/:id/remaining-payment/cash", protect, async (req, res) => {
+  const { calculatePaymentAmounts } = require("../services/paymentService");
+  const { UPFRONT_PERCENTAGE, COMMISSION_PERCENTAGE } = require("../services/paymentService");
+  const rideId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ message: "Ride not found." });
+
+    // Check if user is a passenger on this ride
+    const booking = await Booking.findOne({ rideId, passengerId: userId, status: "confirmed" });
+    if (!booking) {
+      return res.status(403).json({ message: "You are not a passenger on this ride." });
+    }
+
+    if (ride.paymentStatus !== "PARTIAL_PAID") {
+      return res.status(400).json({ message: "Ride payment status is not eligible for remaining payment." });
+    }
+
+    // Calculate payment amounts
+    const { baseFare, totalFare, commission, driverEarning } = calculatePaymentAmounts(ride.totalFare || ride.pricePerSeat * booking.seats);
+
+    // Update ride payment status as cash paid
+    ride.paymentStatus = "FULL_PAID";
+    ride.paymentMethod = "cash";
+    ride.commissionPercent = COMMISSION_PERCENTAGE * 100;
+    ride.driverEarning = driverEarning;
+    ride.completedAt = new Date();
+    ride.status = "completed";
+    await ride.save();
+
+    // Add to driver's pending balance
+    const Wallet = require("../models/Wallet");
+    const Transaction = require("../models/Transaction");
+    
+    let wallet = await Wallet.findOne({ userId: ride.driverId });
+    if (!wallet) {
+      wallet = await Wallet.create({ userId: ride.driverId });
+    }
+    wallet.pendingBalance += driverEarning;
+    wallet.totalEarnings += driverEarning;
+    await wallet.save();
+
+    // Create pending transaction for driver
+    await Transaction.create({
+      userId: ride.driverId,
+      rideId,
+      type: "PENDING_CREDIT",
+      amount: driverEarning,
+      description: "Driver earning (cash payment - pending release)",
+      status: "PENDING",
+      metadata: {
+        commission,
+        driverEarning,
+        paymentMethod: "cash",
+      },
+    });
+
+    // Create transaction for passenger
+    await Transaction.create({
+      userId,
+      rideId,
+      type: "CREDIT",
+      amount: totalFare,
+      description: "Cash payment for completed ride",
+      status: "COMPLETED",
+      metadata: {
+        paymentMethod: "cash",
+      },
+    });
+
+    res.json({ success: true, ride, driverEarning });
+  } catch (err) {
+    console.error("Cash payment error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
 
 // POST /api/rides/:id/deviation-charge — Driver requests extra charge for route deviation

@@ -10,15 +10,22 @@ const PAYOUT_DELAY_HOURS = 3; // 3 hours delay for driver payout
 
 /**
  * Calculate payment amounts for a ride
- * @param {number} totalFare - Total fare for the ride
+ * @param {number} baseFare - Base fare set by driver (without fees)
  */
-const calculatePaymentAmounts = (totalFare) => {
+const calculatePaymentAmounts = (baseFare) => {
+  // Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+  const platformFee = baseFare * 0.05; // 5%
+  const afterFee = baseFare + platformFee;
+  const gst = afterFee * 0.0952; // 9.52%
+  const totalFare = afterFee + gst;
+
   const upfrontAmount = Math.round(totalFare * UPFRONT_PERCENTAGE);
   const remainingAmount = totalFare - upfrontAmount;
   const commission = Math.round(remainingAmount * COMMISSION_PERCENTAGE);
   const driverEarning = remainingAmount - commission;
 
   return {
+    baseFare,
     totalFare,
     upfrontAmount,
     remainingAmount,

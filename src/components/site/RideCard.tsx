@@ -28,6 +28,14 @@ function formatDuration(minutes: number) {
   return `${h}h ${m}min`;
 }
 
+// Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+function calculateFinalPrice(basePrice: number): number {
+  const platformFee = basePrice * 0.05; // 5%
+  const afterFee = basePrice + platformFee;
+  const gst = afterFee * 0.0952; // 9.52%
+  return afterFee + gst;
+}
+
 export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {
   const navigate = useNavigate();
   const departure = new Date(departureAt);
@@ -106,7 +114,7 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
           <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3 sm:gap-2 sm:border-l sm:border-border/40 sm:pl-5">
             <div className="flex items-baseline gap-0.5">
               <IndianRupee className="h-4 w-4 text-foreground" />
-              <span className="text-2xl font-bold tabular-nums">{Number(pricePerSeat).toLocaleString("en-IN")}</span>
+              <span className="text-2xl font-bold tabular-nums">{Math.round(calculateFinalPrice(pricePerSeat)).toLocaleString("en-IN")}</span>
               <span className="text-xs text-muted-foreground">.00</span>
             </div>
             <Button
