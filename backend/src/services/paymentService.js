@@ -4,7 +4,7 @@ const Transaction = require("../models/Transaction");
 const { createOrder, verifyPayment, fetchPayment, createPayout } = require("../utils/razorpay");
 const { payoutQueue } = require("../config/queue");
 
-const UPFRONT_PERCENTAGE = 0.25; // 25% upfront
+const UPFRONT_PERCENTAGE = 0.00; // 0% upfront - only GST
 const COMMISSION_PERCENTAGE = 0.10; // 10% platform commission
 const PAYOUT_DELAY_HOURS = 3; // 3 hours delay for driver payout
 
@@ -13,23 +13,26 @@ const PAYOUT_DELAY_HOURS = 3; // 3 hours delay for driver payout
  * @param {number} baseFare - Base fare set by driver (without fees)
  */
 const calculatePaymentAmounts = (baseFare) => {
-  // Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+  // Calculate as per formula: base + 5% platform fee + 9.52% GST on (base + fee)
   const platformFee = baseFare * 0.05; // 5%
   const afterFee = baseFare + platformFee;
-  const gst = afterFee * 0.0952; // 9.52%
+  const gst = afterFee * 0.0952; // 9.52% on (base + platform fee)
   const totalFare = afterFee + gst;
 
-  const upfrontAmount = Math.round(totalFare * UPFRONT_PERCENTAGE);
-  const remainingAmount = totalFare - upfrontAmount;
-  const commission = Math.round(remainingAmount * COMMISSION_PERCENTAGE);
-  const driverEarning = remainingAmount - commission;
+  // Upfront is only GST amount
+  const upfrontAmount = Math.round(gst);
+  // Remaining is base + platform fee
+  const remainingAmount = Math.round(afterFee);
+  // Driver receives full remaining amount (no commission deduction)
+  const driverEarning = remainingAmount;
 
   return {
     baseFare,
+    platformFee,
+    gst,
     totalFare,
     upfrontAmount,
     remainingAmount,
-    commission,
     driverEarning,
   };
 };
@@ -199,12 +202,11 @@ const processRemainingPayment = async (rideId, paymentId, signature, userId) => 
     }
 
     // Calculate driver earnings
-    const { commission, driverEarning } = calculatePaymentAmounts(ride.totalFare);
+    const { driverEarning } = calculatePaymentAmounts(ride.totalFare);
 
     // Update ride payment status
     ride.razorpayPaymentId = paymentId;
     ride.paymentStatus = "FULL_PAID";
-    ride.commissionPercent = COMMISSION_PERCENTAGE * 100;
     ride.driverEarning = driverEarning;
     await ride.save();
 
@@ -238,7 +240,6 @@ const processRemainingPayment = async (rideId, paymentId, signature, userId) => 
       description: "Driver earning (pending release)",
       status: "PENDING",
       metadata: {
-        commission,
         driverEarning,
       },
     });

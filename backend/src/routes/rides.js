@@ -707,12 +707,11 @@ router.post("/:id/remaining-payment/cash", protect, async (req, res) => {
     }
 
     // Calculate payment amounts
-    const { baseFare, totalFare, commission, driverEarning } = calculatePaymentAmounts(ride.totalFare || ride.pricePerSeat * booking.seats);
+    const { baseFare, totalFare, driverEarning } = calculatePaymentAmounts(ride.totalFare || ride.pricePerSeat * booking.seats);
 
     // Update ride payment status as cash paid
     ride.paymentStatus = "FULL_PAID";
     ride.paymentMethod = "cash";
-    ride.commissionPercent = COMMISSION_PERCENTAGE * 100;
     ride.driverEarning = driverEarning;
     ride.completedAt = new Date();
     ride.status = "completed";
@@ -739,7 +738,6 @@ router.post("/:id/remaining-payment/cash", protect, async (req, res) => {
       description: "Driver earning (cash payment - pending release)",
       status: "PENDING",
       metadata: {
-        commission,
         driverEarning,
         paymentMethod: "cash",
       },

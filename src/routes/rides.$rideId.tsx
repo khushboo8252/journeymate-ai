@@ -567,9 +567,9 @@ function RideDetailPage() {
                           </div>
                         </div>
 
-                        {/* Price display - only GST amount */}
+                        {/* Price display - GST as upfront payment */}
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">GST (9.52%)</span>
+                          <span className="text-sm text-muted-foreground">Pay now (GST)</span>
                           <div className="flex items-baseline gap-0.5 font-bold text-lg sm:text-xl">
                             <IndianRupee className="h-4 w-4" />
                             {Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}
@@ -614,6 +614,10 @@ function RideDetailPage() {
                       </div>
                       {!ride.confirmByPassenger && (
                         <div className="space-y-3">
+                          <div className="bg-primary/10 rounded-lg p-3 text-center">
+                            <p className="text-sm text-muted-foreground">Remaining payment</p>
+                            <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05)}</p>
+                          </div>
                           <div className="flex gap-2">
                             <Button
                               onClick={() => setPaymentMethod("online")}
