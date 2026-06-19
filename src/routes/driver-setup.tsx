@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiUser } from "@/lib/api";
@@ -66,6 +67,7 @@ function DriverSetupPage() {
   const [vehicleImage, setVehicleImage] = useState<File | null>(null);
 
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const {
     register,
@@ -612,9 +614,27 @@ function DriverSetupPage() {
               </div>
             </div>
 
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="terms"
+                checked={termsAccepted}
+                onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
+                className="mt-0.5"
+              />
+              <label
+                htmlFor="terms"
+                className="text-sm text-muted-foreground leading-tight cursor-pointer"
+              >
+                I agree to the{" "}
+                <Link to="/terms" className="text-primary hover:underline">
+                  Terms and Conditions
+                </Link>
+              </label>
+            </div>
+
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !termsAccepted}
               className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/30 font-semibold h-12 text-base"
             >
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : t("driver_setup.save")}

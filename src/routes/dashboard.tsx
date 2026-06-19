@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiBooking, ApiUser } from "@/lib/api";
@@ -82,6 +83,7 @@ function DashboardPage() {
   const [selectedRideForSeatMap, setSelectedRideForSeatMap] = useState<ApiRide | null>(null);
   const [seatsForMap, setSeatsForMap] = useState<DriverSeat[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const isDriver = user?.role === "driver";
 
   // Search functionality for passengers
@@ -935,7 +937,24 @@ function DashboardPage() {
                   <Label>Email</Label>
                   <Input value={user.email} disabled className="opacity-60" />
                 </div>
-                <Button onClick={saveProfile} disabled={saving} className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="terms"
+                    checked={termsAccepted}
+                    onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
+                    className="mt-0.5"
+                  />
+                  <label
+                    htmlFor="terms"
+                    className="text-sm text-muted-foreground leading-tight cursor-pointer"
+                  >
+                    I agree to the{" "}
+                    <Link to="/terms" className="text-primary hover:underline">
+                      Terms and Conditions
+                    </Link>
+                  </label>
+                </div>
+                <Button onClick={saveProfile} disabled={saving || !termsAccepted} className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
                   {saving ? "Saving…" : "Save changes"}
                 </Button>
                 {isDriver && (
