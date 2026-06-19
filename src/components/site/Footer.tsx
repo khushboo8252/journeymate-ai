@@ -12,7 +12,7 @@ export function Footer() {
           <div className="flex flex-col items-center gap-2">
             <img src={logoImg} alt="Logo" className="h-8 object-contain" />
             <div className="text-center">
-              <div className="font-bold text-gray-600">Uk<span className="text-yellow-500">yro</span></div>
+              
               <div className="text-xs text-muted-foreground">{t("footer.tagline")}</div>
             </div>
           </div>
@@ -21,7 +21,7 @@ export function Footer() {
             <span className="text-sm font-medium">Help Line: +91 9876543210</span>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} UKYRO. {t("footer.rights")}
+            © {new Date().getFullYear()} <span className="text-yellow-500">U</span><span className="text-gray-600">KYRO</span>. {t("footer.rights")}
           </p>
         </div>
       </div>
