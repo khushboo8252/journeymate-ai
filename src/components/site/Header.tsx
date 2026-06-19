@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LanguageToggle } from "./LanguageToggle";
 import { useAuth } from "@/hooks/use-auth";
-import logoImg from "@/assets/3D.jpg";
+import logoImg from "@/assets/logo.jpg";
 
 export function Header() {
   const { t } = useTranslation();
