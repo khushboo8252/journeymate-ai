@@ -222,33 +222,6 @@ function DashboardPage() {
       }
     });
 
-    // Deviation charge notifications
-    socket.on("deviation_charge_requested", (data) => {
-      if (!isDriver) {
-        toast.warning(data.message || "Driver has requested extra charge for route deviation.");
-        fetchData();
-      }
-    });
-
-    socket.on("deviation_charge_approved", (data) => {
-      if (isDriver) {
-        toast.success(data.message || "Deviation charge approved by passenger.");
-        fetchData();
-      } else {
-        toast.success(data.message || "Deviation charge has been approved.");
-        fetchData();
-      }
-    });
-
-    socket.on("deviation_charge_rejected", (data) => {
-      if (isDriver) {
-        toast.info(data.message || "Deviation charge rejected by passenger.");
-        fetchData();
-      } else {
-        toast.info(data.message || "Deviation charge request has been rejected.");
-        fetchData();
-      }
-    });
 
     return () => {
       socket.off("driver_approved");
@@ -263,9 +236,6 @@ function DashboardPage() {
       socket.off("passengers_transferred");
       socket.off("cancellation_count_updated");
       socket.off("driver_blocked");
-      socket.off("deviation_charge_requested");
-      socket.off("deviation_charge_approved");
-      socket.off("deviation_charge_rejected");
     };
   }, [user]);
 
@@ -379,21 +349,6 @@ function DashboardPage() {
     }
   };
 
-  const requestDeviationCharge = async (rideId: string, distance: number) => {
-    try {
-      const response = await api.post<{
-        success: boolean;
-        deviationDistance: number;
-        extraCharge: number;
-        message: string;
-      }>(`/api/rides/${rideId}/deviation-charge`, { deviationDistance: distance });
-      
-      toast.success(response.message);
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to request deviation charge");
-    }
-  };
 
   const handlePopupClick = async () => {
     // Mark notification as seen
@@ -715,31 +670,6 @@ function DashboardPage() {
                         <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)} className="text-xs sm:text-sm">
                           <Users className="h-4 w-4 mr-1" />{t("dashboard.seat_map")}
                         </Button>
-                        {!ride.deviationChargeRequested && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => {
-                              const distance = prompt(t("dashboard.enter_deviation_distance"));
-                              if (distance && !isNaN(Number(distance)) && Number(distance) > 0) {
-                                requestDeviationCharge(ride._id, Number(distance));
-                              }
-                            }}
-                            className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10 text-xs sm:text-sm"
-                          >
-                            <Wind className="h-4 w-4 mr-1" />{t("ride_details.deviation_charge")}
-                          </Button>
-                        )}
-                        {ride.deviationChargeRequested && !ride.deviationChargeApproved && (
-                          <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-xs">
-                            {t("ride_details.charge_pending")}
-                          </Badge>
-                        )}
-                        {ride.deviationChargeApproved && (
-                          <Badge variant="default" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">
-                            +₹{ride.extraCharge}
-                          </Badge>
-                        )}
                         <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm">
                           <Check className="h-4 w-4 mr-1" />{t("dashboard.confirm_complete")}
                         </Button>

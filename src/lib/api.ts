@@ -87,11 +87,6 @@ export interface ApiRide {
   confirmByDriver?: boolean;
   confirmByPassenger?: boolean;
   completedAt?: string | null;
-  // Route deviation and extra charges
-  deviationDistance?: number;
-  extraCharge?: number;
-  deviationChargeRequested?: boolean;
-  deviationChargeApproved?: boolean;
 }
 
 export interface ApiBooking {
