@@ -8,6 +8,9 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
   },
+  tls: {
+    rejectUnauthorized: false, // Allow self-signed certificates
+  },
 });
 
 const sendDriverApprovalRequestEmail = async (driver) => {
@@ -87,7 +90,60 @@ const sendDriverApprovalEmail = async (driverEmail, driverName, approved) => {
   }
 };
 
+const sendBookingNotificationEmail = async (driverEmail, driverName, passengerName, passengerPhone, rideOrigin, rideDestination, rideDate, seatsBooked, totalPrice, baseFare, platformFee, gst) => {
+  try {
+    const mailOptions = {
+      from: process.env.SMTP_USER,
+      to: driverEmail,
+      subject: "New Booking Received - Ukyro",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #22c55e;">New Booking Received!</h2>
+          <p>Dear ${driverName},</p>
+          <p>You have received a new booking on your ride. Here are the details:</p>
+          
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">Passenger Information</h3>
+            <p><strong>Name:</strong> ${passengerName}</p>
+            <p><strong>Phone:</strong> ${passengerPhone}</p>
+            <p><strong>Seats Booked:</strong> ${seatsBooked}</p>
+            <p><strong>Total Price:</strong> ₹${totalPrice}</p>
+          </div>
+          
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">Ride Information</h3>
+            <p><strong>From:</strong> ${rideOrigin}</p>
+            <p><strong>To:</strong> ${rideDestination}</p>
+            <p><strong>Date:</strong> ${new Date(rideDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p><strong>Time:</strong> ${new Date(rideDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
+          </div>
+
+          <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">Price Breakdown</h3>
+            <p><strong>Base fare:</strong> ₹${Math.round(baseFare)}</p>
+            <p><strong>Platform fee (5%):</strong> ₹${Math.round(platformFee)}</p>
+            <p><strong>GST (9.52%):</strong> ₹${Math.round(gst)}</p>
+            <p style="font-size: 18px; font-weight: bold; color: #22c55e; margin-top: 10px;"><strong>Total Price:</strong> ₹${totalPrice}</p>
+          </div>
+          
+          <p>Please contact the passenger to confirm pickup details. The passenger has paid the upfront GST amount.</p>
+          
+          <p style="margin-top: 30px; color: #666; font-size: 12px;">
+            This is an automated email from Ukyro. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Booking notification email sent to ${driverEmail}`);
+  } catch (error) {
+    console.error("Error sending booking notification email:", error);
+  }
+};
+
 module.exports = {
   sendDriverApprovalRequestEmail,
   sendDriverApprovalEmail,
+  sendBookingNotificationEmail,
 };

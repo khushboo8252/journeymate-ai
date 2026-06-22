@@ -11,8 +11,13 @@ import {
   Loader2,
   Lock,
   MessageSquare,
+  Phone,
   Users,
   Zap,
+  Star,
+  Shield,
+  MapPin,
+  Clock,
 } from "lucide-react";
 import { DriverLocationMap } from "@/components/maps/DriverLocationMap";
 import { LocationTracker } from "@/components/driver/LocationTracker";
@@ -28,6 +33,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { playAlertSound } from "@/lib/sounds";
 
 export const Route = createFileRoute("/rides/$rideId")({
   head: () => ({
@@ -101,6 +107,7 @@ function RideDetailPage() {
     // Listen for ride completion confirmation events
     socket.on("driver_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && !isDriver) {
+        playAlertSound();
         toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
         fetchRide();
       }
@@ -108,6 +115,7 @@ function RideDetailPage() {
 
     socket.on("passenger_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && isDriver) {
+        playAlertSound();
         toast.success("Passenger has confirmed ride completion.");
         fetchRide();
       }
@@ -115,6 +123,7 @@ function RideDetailPage() {
 
     socket.on("ride_completed", (data: any) => {
       if (data.rideId === ride._id) {
+        playAlertSound();
         toast.success("Ride completed successfully!");
         fetchRide();
       }
@@ -148,6 +157,24 @@ function RideDetailPage() {
       socket.off("booking_transferred");
     };
   }, [ride]);
+
+  // Initialize audio context on user interaction
+  useEffect(() => {
+    const initAudio = () => {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+    };
+
+    document.addEventListener('click', initAudio, { once: true });
+    document.addEventListener('keydown', initAudio, { once: true });
+
+    return () => {
+      document.removeEventListener('click', initAudio);
+      document.removeEventListener('keydown', initAudio);
+    };
+  }, []);
 
   const fetchRide = async () => {
     try {
@@ -312,18 +339,48 @@ function RideDetailPage() {
 
   const formatDur = (m: number) => {
     const h = Math.floor(m / 60), min = m % 60;
-    return h === 0 ? `${min}min` : min === 0 ? `${h}h` : `${h}h${min}`;
+    return h === 0 ? `${min}min` : min === 0 ? `${h}hr` : `${h}hr ${min}min`;
   };
 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto px-4 md:px-6 py-10 max-w-5xl">
-        <Link to="/search" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <main className="flex-1 container mx-auto px-4 md:px-6 py-6 max-w-5xl">
+        <Link to="/search" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
           <ArrowLeft className="h-4 w-4" />{t("ride_details.back")}
         </Link>
 
-        <h1 className="text-2xl font-bold mb-6">{t("ride_details.title")}</h1>
+        {/* Ride Summary Banner */}
+        <div className="glass rounded-2xl p-4 sm:p-6 mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h2 className="text-xl sm:text-2xl font-bold mb-2">
+                {ride.origin} → {ride.destination}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  {format(departure, "d MMMM • HH:mm")}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Car className="h-4 w-4" />
+                  {ride.vehicleType || "Sedan"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  {ride.seatsAvailable} seats left
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl sm:text-3xl font-bold text-primary">
+                <IndianRupee className="h-5 w-5 inline" />
+                {ride.pricePerSeat}
+              </div>
+              <div className="text-xs text-muted-foreground">per seat</div>
+            </div>
+          </div>
+        </div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -336,36 +393,49 @@ function RideDetailPage() {
                 <div className="flex gap-4">
                   {/* Timeline spine */}
                   <div className="flex flex-col items-center pt-1">
-                    <div className="h-2.5 w-2.5 rounded-full border-2 border-primary bg-background mt-0.5" />
-                    <div className="flex-1 w-px bg-border my-1" />
-                    <div className="h-2.5 w-2.5 rounded-full border-2 border-primary bg-background mb-0.5" />
+                    <div className="h-3 w-3 rounded-full bg-primary shadow-lg shadow-primary/50" />
+                    <div className="flex-1 w-0.5 bg-gradient-to-b from-primary to-primary/30 my-2" />
+                    <div className="h-3 w-3 rounded-full bg-primary/50 border-2 border-primary" />
                   </div>
 
                   {/* Stops */}
-                  <div className="flex-1 space-y-3">
+                  <div className="flex-1 space-y-4">
                     {/* Departure stop */}
                     <div>
                       <div className="flex items-baseline gap-3">
-                        <span className="text-base sm:text-lg font-bold tabular-nums w-12 shrink-0">{format(departure, "HH:mm")}</span>
-                        <span className="font-semibold text-sm sm:text-base">{ride.origin}</span>
+                        <span className="text-lg sm:text-xl font-bold tabular-nums w-16 shrink-0">{format(departure, "HH:mm")}</span>
+                        <div>
+                          <span className="font-semibold text-base sm:text-lg">{ride.origin}</span>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <MapPin className="h-3 w-3" />
+                            Pickup point
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     {/* Duration in between */}
                     {durationMins !== null && (
-                      <div className="flex items-center gap-3 py-0.5">
-                        <span className="text-xs text-muted-foreground w-12 shrink-0">{formatDur(durationMins)}</span>
-                        <span className="text-xs text-muted-foreground">{t("ride_details.duration")}</span>
+                      <div className="flex items-center gap-3 py-1">
+                        <span className="text-sm font-medium text-primary w-16 shrink-0">{formatDur(durationMins)}</span>
+                        <div className="flex-1 h-px bg-border/50" />
+                        <span className="text-xs text-muted-foreground">Estimated travel time</span>
                       </div>
                     )}
 
                     {/* Arrival stop */}
                     <div>
                       <div className="flex items-baseline gap-3">
-                        <span className="text-base sm:text-lg font-bold tabular-nums w-12 shrink-0">
+                        <span className="text-lg sm:text-xl font-bold tabular-nums w-16 shrink-0">
                           {arrival ? format(arrival, "HH:mm") : "—"}
                         </span>
-                        <span className="font-semibold text-sm sm:text-base">{ride.destination}</span>
+                        <div>
+                          <span className="font-semibold text-base sm:text-lg">{ride.destination}</span>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <MapPin className="h-3 w-3" />
+                            Drop-off point
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -387,19 +457,44 @@ function RideDetailPage() {
 
               {/* ── Driver card ── */}
               <div className="glass rounded-2xl overflow-hidden">
-                {/* Driver header row */}
-                <div className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5 hover:bg-muted/10 transition-colors cursor-default">
-                  <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border-2 border-primary/30 shrink-0">
-                    <AvatarImage src={driver?.avatarUrl ?? undefined} />
-                    <AvatarFallback className="text-sm sm:text-base bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
-                      {driverInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm sm:text-base leading-tight">{driver?.fullName ?? "Driver"}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{t("ride_details.verified_driver")}</p>
+                {/* Driver header with rating */}
+                <div className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12 border-2 border-primary/30">
+                        <AvatarImage src={driver?.avatarUrl ?? undefined} />
+                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
+                          {driverInitials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-semibold text-base">{driver?.fullName ?? "Driver"}</p>
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="flex items-center gap-1 text-amber-500">
+                            <Star className="h-3.5 w-3.5 fill-current" />
+                            {driver?.rating ? driver.rating.toFixed(1) : "New"}
+                          </span>
+                          <span className="text-muted-foreground">• {driver?.totalRides || 0} trips</span>
+                        </div>
+                      </div>
+                    </div>
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                      <Shield className="h-3 w-3 mr-1" />
+                      Verified
+                    </Badge>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+
+                  {/* Vehicle info */}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                    <Car className="h-4 w-4" />
+                    <span>{ride.vehicleType || "Sedan"} • {ride.seatsAvailable} seat{ride.seatsAvailable !== 1 ? 's' : ''} available</span>
+                  </div>
+
+                  {/* Instant booking badge */}
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <Zap className="h-4 w-4" />
+                    <span>Instant confirmation</span>
+                  </div>
                 </div>
 
                 <Separator />
@@ -409,24 +504,7 @@ function RideDetailPage() {
                   {/* Location tracking controls for driver */}
                   {isDriver && ride.status === "active" && (
                     <div className="pt-3 border-t border-border/30">
-                      <LocationTracker
-                        rideId={ride._id}
-                        isTracking={isTrackingLocation}
-                        onTrackingChange={setIsTrackingLocation}
-                      />
-                    </div>
-                  )}
-                  {/* Instant booking */}
-                  <div className="flex items-center gap-3 text-sm">
-                    <Zap className="h-4 w-4 text-primary shrink-0" />
-                    <span>{t("ride_details.instant_booking")}</span>
-                  </div>
-
-                  {/* Seats in vehicle */}
-                  {driver?.vehicleSeats && (
-                    <div className="flex items-center gap-3 text-sm">
-                      <Car className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span>{driver.vehicleSeats}-{t("ride_details.seater")}</span>
+                      <LocationTracker rideId={ride._id} />
                     </div>
                   )}
 
@@ -441,7 +519,7 @@ function RideDetailPage() {
                   {/* Phone (shown only if you're the booker or driver) */}
                   {(isDriver || alreadyBooked) && driver?.phone && (
                     <div className="flex items-center gap-3 text-sm">
-                      <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span>{driver.phone}</span>
                     </div>
                   )}
@@ -450,72 +528,121 @@ function RideDetailPage() {
                 {/* Contact button */}
                 {!isDriver && (
                   <div className="px-5 pb-5">
-                    <Button variant="outline" className="flex items-center gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/5">
-                      <MessageSquare className="h-4 w-4" />{t("ride_details.contact")} {driver?.fullName?.split(" ")[0] ?? "Driver"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex items-center gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/5 flex-1 h-10 text-sm font-medium">
+                        <MessageSquare className="h-4 w-4" />{t("ride_details.contact")} {driver?.fullName?.split(" ")[0] ?? "Driver"}
+                      </Button>
+                      {driver?.phone && (
+                        <div className="relative group">
+                          <Button
+                            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 h-10 px-5 font-medium shadow-lg shadow-green-500/30"
+                            onClick={() => window.location.href = `tel:${driver.phone}`}
+                          >
+                            <Phone className="h-4 w-4" />Call
+                          </Button>
+                          {/* Phone number tooltip on hover */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                            {driver.phone}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
 
+              {/* ── Trust Section ── */}
+              <div className="glass rounded-2xl p-4 sm:p-5">
+                <h3 className="font-semibold text-base mb-4">Trust & Reviews</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                      <Star className="h-5 w-5 text-amber-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{driver?.rating ? driver.rating.toFixed(1) : "New"}</p>
+                      <p className="text-xs text-muted-foreground">Rating</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Car className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{driver?.totalRides || 0}</p>
+                      <p className="text-xs text-muted-foreground">Rides</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                      <Shield className="h-5 w-5 text-emerald-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{driver?.isApproved ? "Yes" : "Pending"}</p>
+                      <p className="text-xs text-muted-foreground">ID Verified</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <Phone className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{driver?.responseRate ? `${driver.responseRate}%` : "N/A"}</p>
+                      <p className="text-xs text-muted-foreground">Response</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* ── Live Location Map (for passengers when tracking is active) ── */}
               {!isDriver && driverLocation && (
-                <div className="glass rounded-2xl p-6">
-                  <h3 className="font-semibold text-base mb-4">Driver's Live Location</h3>
-                  <DriverLocationMap
-                    latitude={driverLocation.latitude}
-                    longitude={driverLocation.longitude}
-                    isTracking={isTrackingLocation}
-                  />
+                <div className="glass rounded-2xl overflow-hidden">
+                  <div className="p-4 border-b border-border/30">
+                    <h3 className="font-semibold text-base flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      Driver's Live Location
+                    </h3>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <DriverLocationMap
+                      latitude={driverLocation.latitude}
+                      longitude={driverLocation.longitude}
+                      isTracking={isTrackingLocation}
+                    />
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Live tracking enabled</span>
+                      </div>
+                      {isTrackingLocation && (
+                        <div className="flex items-center gap-1.5 text-green-600">
+                          <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                          <span>Active</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
             </div>
 
             {/* ═══ RIGHT COLUMN — sticky booking panel ═══ */}
-            <div className="w-full lg:w-72 shrink-0 lg:sticky lg:top-24">
-              <div className="glass rounded-2xl overflow-hidden">
+            <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-24">
+              <div className="glass rounded-2xl overflow-hidden border-primary/20">
 
-                {/* Date header */}
-                <div className="px-5 pt-5 pb-3">
-                  <p className="font-semibold text-base">{format(departure, "EEEE, d MMMM")}</p>
-                </div>
-
-                {/* Mini timeline */}
-                <div className="px-5 pb-3">
-                  <div className="flex gap-3">
-                    <div className="flex flex-col items-center pt-1">
-                      <div className="h-2 w-2 rounded-full border-2 border-primary bg-background" />
-                      <div className="flex-1 w-px bg-border my-1" />
-                      <div className="h-2 w-2 rounded-full border-2 border-primary bg-background" />
-                    </div>
-                    <div className="flex-1 space-y-2 text-sm">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-bold tabular-nums">{format(departure, "HH:mm")}</span>
-                        <span className="text-muted-foreground truncate">{ride.origin}</span>
-                      </div>
-                      {durationMins !== null && (
-                        <span className="text-xs text-muted-foreground block -mt-1 pl-0">{formatDur(durationMins)}</span>
-                      )}
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-bold tabular-nums">
-                          {arrival ? format(arrival, "HH:mm") : "—"}
-                        </span>
-                        <span className="text-muted-foreground truncate">{ride.destination}</span>
-                      </div>
-                    </div>
+                {/* Price header */}
+                <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-5">
+                  <div className="flex items-baseline gap-1">
+                    <IndianRupee className="h-6 w-6 text-primary" />
+                    <span className="text-3xl font-bold text-primary">{ride.pricePerSeat}</span>
+                    <span className="text-sm text-muted-foreground">/ seat</span>
                   </div>
-                </div>
-
-                {/* Mini driver row */}
-                <div className="px-5 pb-4 flex items-center gap-2">
-                  <Car className="h-5 w-5 text-muted-foreground shrink-0" />
-                  <Avatar className="h-7 w-7 border border-border/40 shrink-0">
-                    <AvatarImage src={driver?.avatarUrl ?? undefined} />
-                    <AvatarFallback className="text-xs bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-semibold">
-                      {driverInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium">{driver?.fullName?.split(" ")[0] ?? "Driver"}</span>
+                  <div className="flex items-center gap-2 mt-2 text-sm">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span className="text-primary font-medium">{ride.seatsAvailable} seats available</span>
+                  </div>
                 </div>
 
                 <Separator />
@@ -541,39 +668,52 @@ function RideDetailPage() {
                   {canBook && (
                     <>
                       {/* Seat count selector */}
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Number of seats</span>
-                          <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Select seats</span>
+                          <div className="flex items-center gap-3">
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
                               onClick={() => setSeatsToBook(Math.max(1, seatsToBook - 1))}
                               disabled={seatsToBook <= 1}
+                              className="h-8 w-8 rounded-full"
                             >
                               -
                             </Button>
-                            <span className="font-semibold w-8 text-center">{seatsToBook}</span>
+                            <span className="font-semibold text-lg w-8 text-center">{seatsToBook}</span>
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
                               onClick={() => setSeatsToBook(Math.min(ride.seatsAvailable, seatsToBook + 1))}
                               disabled={seatsToBook >= ride.seatsAvailable}
+                              className="h-8 w-8 rounded-full"
                             >
                               +
                             </Button>
                           </div>
                         </div>
 
-                        {/* Price display - GST as upfront payment */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Pay now (GST)</span>
-                          <div className="flex items-baseline gap-0.5 font-bold text-lg sm:text-xl">
-                            <IndianRupee className="h-4 w-4" />
-                            {Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}
-                            <span className="text-xs font-normal text-muted-foreground">.00</span>
+                        {/* Price breakdown */}
+                        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Base fare</span>
+                            <span className="font-medium">₹{ride.pricePerSeat * seatsToBook}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Platform fee (5%)</span>
+                            <span className="font-medium">₹{Math.round(ride.pricePerSeat * seatsToBook * 0.05)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">GST (9.52%)</span>
+                            <span className="font-medium">₹{Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}</span>
+                          </div>
+                          <Separator className="my-2" />
+                          <div className="flex justify-between font-semibold">
+                            <span>Pay now (GST)</span>
+                            <span className="text-primary">₹{Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}</span>
                           </div>
                         </div>
                       </div>
@@ -582,11 +722,11 @@ function RideDetailPage() {
                       <Button
                         onClick={bookRide}
                         disabled={booking}
-                        className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-10 sm:h-11 rounded-full text-sm sm:text-base shadow-lg shadow-primary/30 disabled:opacity-40"
+                        className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-12 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
                       >
                         {booking
-                          ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                          : <><Zap className="h-4 w-4 mr-1.5" />{t("ride_details.book")} {seatsToBook} {seatsToBook > 1 ? t("ride_details.seats") : t("ride_details.seat")}</>}
+                          ? <Loader2 className="h-5 w-5 animate-spin" />
+                          : <><Zap className="h-5 w-5 mr-2" />Book {seatsToBook} seat{seatsToBook > 1 ? 's' : ''}</>}
                       </Button>
                     </>
                   )}

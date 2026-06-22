@@ -64,6 +64,9 @@ export interface ApiUser {
   createdAt: string;
   updatedAt?: string;
   rideCancellationCount?: number;
+  rating?: number;
+  totalRides?: number;
+  responseRate?: number;
 }
 
 export interface ApiRide {

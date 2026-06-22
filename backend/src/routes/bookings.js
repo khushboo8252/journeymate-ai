@@ -3,8 +3,10 @@ const { body, validationResult } = require("express-validator");
 const Booking = require("../models/Booking");
 const Ride = require("../models/Ride");
 const Seat = require("../models/Seat");
+const User = require("../models/User");
 const { protect, restrictTo } = require("../middleware/auth");
 const { createUpfrontPaymentOrder, processUpfrontPayment } = require("../services/paymentService");
+const { sendBookingNotificationEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -134,6 +136,33 @@ router.post(
       const ride = await Ride.findById(booking.rideId);
       ride.seatsAvailable = Math.max(0, ride.seatsAvailable - booking.seats);
       await ride.save();
+
+      // Get driver details for email notification
+      const driver = await User.findById(ride.driverId);
+      const passenger = await User.findById(userId);
+
+      // Send email notification to driver
+      if (driver && driver.email && passenger) {
+        const baseFare = ride.pricePerSeat * booking.seats;
+        const platformFee = baseFare * 0.05;
+        const afterFee = baseFare + platformFee;
+        const gst = afterFee * 0.0952;
+        const totalPrice = Math.round(baseFare + platformFee + gst);
+        sendBookingNotificationEmail(
+          driver.email,
+          driver.fullName,
+          passenger.fullName,
+          passenger.phone,
+          ride.origin,
+          ride.destination,
+          ride.departureAt,
+          booking.seats,
+          totalPrice,
+          baseFare,
+          platformFee,
+          gst
+        );
+      }
 
       // Emit real-time events
       const bookingWithDetails = await Booking.findById(booking._id)

@@ -70,7 +70,7 @@ const generateSeats = (rideId, vehicleType = 'sedan', customSeatsTotal = null) =
         row: row,
         position: j + 1,
         type: seatType,
-        status: 'available' // All seats available for passengers
+        status: isDriver ? 'booked' : 'available' // Driver seat is always booked
       });
 
       seatCounter++;

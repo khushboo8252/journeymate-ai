@@ -46,8 +46,8 @@ const userSchema = new mongoose.Schema(
     },
     vehicleSeats: {
       type: Number,
-      min: 1,
-      max: 8,
+      min: 4,
+      max: 15,
       default: null,
     },
     vehicleNumber: {
@@ -123,6 +123,23 @@ const userSchema = new mongoose.Schema(
     rideCancellationCount: {
       type: Number,
       default: 0,
+    },
+    // Trust and reputation fields
+    rating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    totalRides: {
+      type: Number,
+      default: 0,
+    },
+    responseRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
     },
   },
   { timestamps: true }

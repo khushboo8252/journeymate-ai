@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -181,10 +181,11 @@ function AuthPage() {
   const navigate = useNavigate();
 
   // Redirect to dashboard if already logged in
-  if (!loading && user) {
-    navigate({ to: "/dashboard" });
-    return null;
-  }
+  useEffect(() => {
+    if (!loading && user) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [loading, user, navigate]);
 
   if (loading) {
     return (
@@ -195,6 +196,10 @@ function AuthPage() {
         </main>
       </div>
     );
+  }
+
+  if (user) {
+    return null;
   }
 
   return (

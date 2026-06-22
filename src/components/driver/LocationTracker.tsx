@@ -1,12 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { MapPin, Navigation } from "lucide-react";
 import { api } from "@/lib/api";
-import { toast } from "sonner";
 
 interface LocationTrackerProps {
   rideId: string;
-  isTracking: boolean;
-  onTrackingChange?: (isTracking: boolean) => void;
 }
 
 interface Location {
@@ -14,50 +11,38 @@ interface Location {
   longitude: number;
 }
 
-export function LocationTracker({ rideId, isTracking, onTrackingChange }: LocationTrackerProps) {
+export function LocationTracker({ rideId }: LocationTrackerProps) {
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
-  const startTracking = async () => {
-    try {
-      // Start tracking on backend
-      await api.patch(`/api/rides/${rideId}/location/start`);
-      
-      // Start geolocation watch
-      if ("geolocation" in navigator) {
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            setCurrentLocation({ latitude, longitude });
-            
-            // Send location to backend
-            try {
-              await api.patch(`/api/rides/${rideId}/location`, { latitude, longitude });
-            } catch (err) {
-              console.error("Failed to update location:", err);
-            }
-          },
-          (error) => {
-            console.error("Geolocation error:", error);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 5000,
-          }
-        );
-      }
-      
-      onTrackingChange?.(true);
-    } catch (err) {
-      console.error("Failed to start tracking:", err);
-    }
-  };
-
-  // Auto-start tracking when component mounts
   useEffect(() => {
-    if (!isTracking) {
-      startTracking();
+    // Start geolocation watch (tracking is already enabled on backend)
+    if ("geolocation" in navigator) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setCurrentLocation({ latitude, longitude });
+
+          // Send location to backend
+          try {
+            await api.patch(`/api/rides/${rideId}/location`, { latitude, longitude });
+          } catch (err) {
+            console.error("Failed to update location:", err);
+          }
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          // Don't show toast for timeout errors - they're common
+          if (error.code !== 3) {
+            console.error("Geolocation permission or access error:", error.message);
+          }
+        },
+        {
+          enableHighAccuracy: false, // Changed to false for better reliability
+          timeout: 30000, // Increased from 10s to 30s
+          maximumAge: 60000, // Increased from 5s to 60s for better caching
+        }
+      );
     }
 
     // Cleanup on unmount
@@ -66,7 +51,7 @@ export function LocationTracker({ rideId, isTracking, onTrackingChange }: Locati
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, []);
+  }, [rideId]);
 
   return (
     <div className="flex items-center gap-2">

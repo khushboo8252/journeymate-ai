@@ -20,17 +20,6 @@ const paymentRoutes = require("./routes/payments");
 const app = express();
 const httpServer = createServer(app);
 
-// Socket.io setup
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:8080",
-    credentials: true,
-  },
-});
-
-// Make io globally accessible
-global.io = io;
-
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL,
   "https://journeymate-ai-dgfd.vercel.app",
@@ -40,6 +29,17 @@ const ALLOWED_ORIGINS = [
   "http://localhost:8080",
   "http://localhost:8081",
 ].filter(Boolean);
+
+// Socket.io setup
+const io = new Server(httpServer, {
+  cors: {
+    origin: ALLOWED_ORIGINS,
+    credentials: true,
+  },
+});
+
+// Make io globally accessible
+global.io = io;
 
 app.use(
   cors({

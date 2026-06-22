@@ -62,7 +62,7 @@ router.get("/my", protect, async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id)
-      .populate("driverId", "fullName avatarUrl phone vehicleSeats isProfileComplete role")
+      .populate("driverId", "fullName avatarUrl phone vehicleSeats isProfileComplete role rating totalRides responseRate")
       .lean();
     if (!ride) return res.status(404).json({ message: "Ride not found." });
     res.json(ride);
@@ -112,10 +112,11 @@ router.post(
         departureAt: new Date(departureAt),
         arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
         seatsTotal: finalSeatsTotal,
-        seatsAvailable: finalSeatsTotal, // All seats available for passengers
+        seatsAvailable: finalSeatsTotal - 1, // Exclude driver seat from available seats
         pricePerSeat: Number(pricePerSeat),
         description: description || null,
         vehicleType,
+        isTrackingLocation: true, // Auto-start location tracking
       });
 
       // Auto-generate seats for the ride based on user-selected total
