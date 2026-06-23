@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +19,9 @@ import type { ApiUser } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: search.tab as string || "signin",
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — Ukyro" },
@@ -185,6 +188,13 @@ function AuthPage() {
   const { t } = useTranslation();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const search = useSearch({ from: "/auth" });
+  const [activeTab, setActiveTab] = useState((search as any).tab || "signin");
+
+  // Update tab when URL search params change
+  useEffect(() => {
+    setActiveTab((search as any).tab || "signin");
+  }, [search]);
 
   // Redirect based on user role and profile status
   useEffect(() => {
@@ -239,7 +249,10 @@ function AuthPage() {
               </div>
             </div>
 
-            <Tabs defaultValue="signin">
+            <Tabs value={activeTab} onValueChange={(value) => {
+    setActiveTab(value);
+    navigate({ to: "/auth", search: { tab: value } });
+  }}>
               <TabsList className="w-full mb-6 bg-muted/40">
                 <TabsTrigger value="signin" className="flex-1">{t("auth.signin")}</TabsTrigger>
                 <TabsTrigger value="signup" className="flex-1">{t("auth.signup")}</TabsTrigger>

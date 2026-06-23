@@ -42,7 +42,20 @@ router.get("/", async (req, res) => {
       .populate("driverId", "fullName avatarUrl")
       .lean();
 
-    console.log("Found rides:", rides.length);
+    console.log("Search rides result count:", rides.length);
+    if (rides.length > 0) {
+      console.log("Sample ride data:", rides[0]);
+    } else {
+      // If no results, show all active rides for debugging
+      const allActiveRides = await Ride.find({ status: "active" })
+        .select("origin destination seatsAvailable")
+        .lean();
+      console.log("All active rides for debug:", allActiveRides.map(r => ({
+        origin: r.origin,
+        destination: r.destination,
+        seatsAvailable: r.seatsAvailable
+      })));
+    }
 
     res.json(rides);
   } catch (err) {
@@ -124,7 +137,7 @@ router.post(
         departureAt: new Date(departureAt),
         arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
         seatsTotal: finalSeatsTotal,
-        seatsAvailable: finalSeatsTotal - 1, // Exclude driver seat from available seats
+        seatsAvailable: finalSeatsTotal, // All seats available for passengers
         pricePerSeat: Number(pricePerSeat),
         description: description || null,
         vehicleType,

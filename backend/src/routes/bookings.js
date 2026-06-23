@@ -145,9 +145,7 @@ router.post(
       if (driver && driver.email && passenger) {
         const baseFare = ride.pricePerSeat * booking.seats;
         const platformFee = baseFare * 0.05;
-        const afterFee = baseFare + platformFee;
-        const gst = afterFee * 0.0952;
-        const totalPrice = Math.round(baseFare + platformFee + gst);
+        const totalPrice = Math.round(baseFare + platformFee);
         sendBookingNotificationEmail(
           driver.email,
           driver.fullName,
@@ -160,7 +158,7 @@ router.post(
           totalPrice,
           baseFare,
           platformFee,
-          gst
+          0 // GST is now 0
         );
       }
 

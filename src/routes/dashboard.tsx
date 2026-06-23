@@ -378,7 +378,14 @@ function DashboardPage() {
       const qs = new URLSearchParams();
       if (searchFrom.trim()) qs.set("from", searchFrom.trim());
       if (searchTo.trim()) qs.set("to", searchTo.trim());
-      if (searchDate) qs.set("date", searchDate);
+      // Only send date if it's explicitly selected (not empty)
+      if (searchDate && searchDate.trim()) {
+        qs.set("date", searchDate);
+        console.log("Date parameter being sent:", searchDate);
+      } else {
+        console.log("Date parameter NOT being sent (empty)");
+      }
+      console.log("Search query string:", qs.toString());
       const data = await api.get<ApiRide[]>(`/api/rides?${qs.toString()}`);
       setSearchRides(Array.isArray(data) ? data : []);
     } catch {
@@ -398,7 +405,7 @@ function DashboardPage() {
             <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">{t("auth.signin")}</h2>
             <p className="text-muted-foreground mb-6">Please sign in to view your dashboard.</p>
-            <Link to="/auth">
+            <Link to="/auth" search={{ tab: "signin" }}>
               <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
                 {t("auth.signin")}
               </Button>
@@ -588,13 +595,27 @@ function DashboardPage() {
                         <Calendar className="h-3 w-3" />
                         {t("search.date")}
                       </label>
-                      <Input
-                        type="date"
-                        min={new Date().toISOString().split("T")[0]}
-                        value={searchDate}
-                        onChange={e => setSearchDate(e.target.value)}
-                        className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          min={new Date().toISOString().split("T")[0]}
+                          value={searchDate}
+                          onChange={e => setSearchDate(e.target.value)}
+                          className="border-0 bg-transparent px-0 h-7 text-sm focus-visible:ring-0 flex-1"
+                          autoComplete="off"
+                        />
+                        {searchDate && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1 hover:bg-transparent"
+                            onClick={() => setSearchDate("")}
+                          >
+                            <X className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <Button onClick={handleSearch} disabled={searchLoading} className="w-full mt-3 sm:mt-4 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/40 font-semibold h-10 sm:h-11">

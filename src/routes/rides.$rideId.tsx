@@ -209,7 +209,7 @@ function RideDetailPage() {
   };
 
   const bookRide = async () => {
-    if (!user) { navigate({ to: "/auth" }); return; }
+    if (!user) { navigate({ to: "/auth", search: { tab: "signin" } }); return; }
     if (!ride) return;
     if (seatsToBook < 1) { toast.error("Please select at least 1 seat"); return; }
     setBooking(true);
@@ -653,7 +653,7 @@ function RideDetailPage() {
                     <div className="text-center space-y-3">
                       <Lock className="h-7 w-7 text-muted-foreground/40 mx-auto" />
                       <p className="text-sm text-muted-foreground">{t("ride_details.sign_in_to_book")}</p>
-                      <Link to="/auth">
+                      <Link to="/auth" search={{ tab: "signin" }}>
                         <Button className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full font-semibold">
                           {t("auth.signin")}
                         </Button>

@@ -207,10 +207,10 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link to="/auth" className="hidden sm:inline-flex">
+              <Link to="/auth" search={{ tab: "signin" }} className="hidden sm:inline-flex">
                 <Button variant="ghost" size="sm">{t("nav.login")}</Button>
               </Link>
-              <Link to="/auth">
+              <Link to="/auth" search={{ tab: "signup" }}>
                 <Button size="sm" className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity shadow-lg shadow-primary/30">
                   {t("nav.signup")}
                 </Button>
