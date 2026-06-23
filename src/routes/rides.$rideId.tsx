@@ -375,7 +375,7 @@ function RideDetailPage() {
             <div className="text-right">
               <div className="text-2xl sm:text-3xl font-bold text-primary">
                 <IndianRupee className="h-5 w-5 inline" />
-                {ride.pricePerSeat}
+                {Math.round(ride.pricePerSeat * 1.05)}
               </div>
               <div className="text-xs text-muted-foreground">per seat</div>
             </div>
@@ -636,7 +636,7 @@ function RideDetailPage() {
                 <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-5">
                   <div className="flex items-baseline gap-1">
                     <IndianRupee className="h-6 w-6 text-primary" />
-                    <span className="text-3xl font-bold text-primary">{ride.pricePerSeat}</span>
+                    <span className="text-3xl font-bold text-primary">{Math.round(ride.pricePerSeat * 1.05)}</span>
                     <span className="text-sm text-muted-foreground">/ seat</span>
                   </div>
                   <div className="flex items-center gap-2 mt-2 text-sm">
@@ -696,38 +696,17 @@ function RideDetailPage() {
                           </div>
                         </div>
 
-                        {/* Price breakdown */}
-                        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Base fare</span>
-                            <span className="font-medium">₹{ride.pricePerSeat * seatsToBook}</span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Platform fee (5%)</span>
-                            <span className="font-medium">₹{Math.round(ride.pricePerSeat * seatsToBook * 0.05)}</span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">GST (9.52%)</span>
-                            <span className="font-medium">₹{Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}</span>
-                          </div>
-                          <Separator className="my-2" />
-                          <div className="flex justify-between font-semibold">
-                            <span>Pay now (GST)</span>
-                            <span className="text-primary">₹{Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}</span>
-                          </div>
-                        </div>
+                        {/* Book button */}
+                        <Button
+                          onClick={bookRide}
+                          disabled={booking}
+                          className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-12 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
+                        >
+                          {booking
+                            ? <Loader2 className="h-5 w-5 animate-spin" />
+                            : <>Book {seatsToBook} seat{seatsToBook > 1 ? 's' : ''} at ₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)}</>}
+                        </Button>
                       </div>
-
-                      {/* Book button */}
-                      <Button
-                        onClick={bookRide}
-                        disabled={booking}
-                        className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-12 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
-                      >
-                        {booking
-                          ? <Loader2 className="h-5 w-5 animate-spin" />
-                          : <><Zap className="h-5 w-5 mr-2" />Book {seatsToBook} seat{seatsToBook > 1 ? 's' : ''}</>}
-                      </Button>
                     </>
                   )}
 
@@ -756,7 +735,7 @@ function RideDetailPage() {
                         <div className="space-y-3">
                           <div className="bg-primary/10 rounded-lg p-3 text-center">
                             <p className="text-sm text-muted-foreground">Remaining payment</p>
-                            <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05)}</p>
+                            <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</p>
                           </div>
                           <div className="flex gap-2">
                             <Button

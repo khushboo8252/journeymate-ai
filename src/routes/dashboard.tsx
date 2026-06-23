@@ -365,12 +365,10 @@ function DashboardPage() {
     setShowApprovalPopup(false);
   };
 
-  // Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+  // Calculate final price for passengers: base + 5% platform fee (no GST)
   const calculateFinalPrice = (basePrice: number): number => {
     const platformFee = basePrice * 0.05; // 5%
-    const afterFee = basePrice + platformFee;
-    const gst = afterFee * 0.0952; // 9.52%
-    return afterFee + gst;
+    return basePrice + platformFee;
   };
 
   const handleSearch = async () => {
@@ -717,17 +715,6 @@ function DashboardPage() {
                     <div className="pt-3 border-t border-border/30">
                       <LocationTracker
                         rideId={ride._id}
-                        isTracking={ride.isTrackingLocation || false}
-                        onTrackingChange={(isTracking) => {
-                          // Update ride in local state to reflect tracking status
-                          setMyRides(prevRides => 
-                            prevRides.map(r => 
-                              r._id === ride._id 
-                                ? { ...r, isTrackingLocation: isTracking } 
-                                : r
-                            )
-                          );
-                        }}
                       />
                     </div>
                   )}

@@ -28,12 +28,10 @@ function formatDuration(minutes: number) {
   return `${h}h ${m}min`;
 }
 
-// Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+// Calculate final price for passengers: base + 5% platform fee (no GST)
 function calculateFinalPrice(basePrice: number): number {
   const platformFee = basePrice * 0.05; // 5%
-  const afterFee = basePrice + platformFee;
-  const gst = afterFee * 0.0952; // 9.52%
-  return afterFee + gst;
+  return basePrice + platformFee;
 }
 
 export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {

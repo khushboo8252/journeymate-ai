@@ -28,6 +28,8 @@ router.get("/", async (req, res) => {
       filter.departureAt = { $gte: start, $lte: end };
     }
 
+    console.log("Search rides filter:", filter);
+
     const sortMap = {
       departureAt: { departureAt: 1 },
       pricePerSeat: { pricePerSeat: 1 },
@@ -40,8 +42,11 @@ router.get("/", async (req, res) => {
       .populate("driverId", "fullName avatarUrl")
       .lean();
 
+    console.log("Found rides:", rides.length);
+
     res.json(rides);
   } catch (err) {
+    console.error("Search rides error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -96,6 +101,13 @@ router.post(
     try {
       // Check if driver is approved by admin
       const driver = await User.findById(req.user._id);
+      console.log("Driver status check:", {
+        driverId: req.user._id,
+        isApproved: driver?.isApproved,
+        isProfileComplete: driver?.isProfileComplete,
+        role: driver?.role,
+      });
+
       if (!driver.isApproved) {
         return res.status(403).json({
           message: "Your account is pending admin approval. You cannot publish rides until approved."

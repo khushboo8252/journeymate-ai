@@ -59,9 +59,15 @@ function SignInForm() {
       setToken(data.token);
       setUser(data.user);
       toast.success(t("auth.welcome_back"));
-      // If user is a driver and is approved, redirect to publish page
-      if (data.user.role === "driver" && data.user.isApproved) {
-        navigate({ to: "/publish" });
+      // If user is a driver and hasn't completed profile, redirect to driver-setup
+      if (data.user.role === "driver") {
+        if (!(data.user as any).isProfileComplete) {
+          navigate({ to: "/driver-setup" });
+        } else if (data.user.isApproved) {
+          navigate({ to: "/publish" });
+        } else {
+          navigate({ to: "/dashboard" });
+        }
       } else {
         navigate({ to: "/dashboard" });
       }
@@ -180,10 +186,20 @@ function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect to dashboard if already logged in
+  // Redirect based on user role and profile status
   useEffect(() => {
     if (!loading && user) {
-      navigate({ to: "/dashboard" });
+      if (user.role === "driver") {
+        if (!(user as any).isProfileComplete) {
+          navigate({ to: "/driver-setup" });
+        } else if (user.isApproved) {
+          navigate({ to: "/publish" });
+        } else {
+          navigate({ to: "/dashboard" });
+        }
+      } else {
+        navigate({ to: "/dashboard" });
+      }
     }
   }, [loading, user, navigate]);
 
