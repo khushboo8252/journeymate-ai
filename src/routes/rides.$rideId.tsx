@@ -529,16 +529,16 @@ function RideDetailPage() {
                 {!isDriver && (
                   <div className="px-5 pb-5">
                     <div className="flex gap-2">
-                      <Button variant="outline" className="flex items-center gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/5 flex-1 h-10 text-sm font-medium">
+                      {/* <Button variant="outline" className="flex items-center gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/5 flex-1 h-10 text-sm font-medium">
                         <MessageSquare className="h-4 w-4" />{t("ride_details.contact")} {driver?.fullName?.split(" ")[0] ?? "Driver"}
-                      </Button>
+                      </Button> */}
                       {driver?.phone && (
                         <div className="relative group">
                           <Button
                             className="flex items-center gap-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 h-10 px-5 font-medium shadow-lg shadow-green-500/30"
                             onClick={() => window.location.href = `tel:${driver.phone}`}
                           >
-                            <Phone className="h-4 w-4" />Call
+                            <Phone className="h-4 w-4" /> Contact {driver.fullName?.split(" ")[0] ?? "Driver"}
                           </Button>
                           {/* Phone number tooltip on hover */}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -734,7 +734,7 @@ function RideDetailPage() {
                       {!ride.confirmByPassenger && (
                         <div className="space-y-3">
                           <div className="bg-primary/10 rounded-lg p-3 text-center">
-                            <p className="text-sm text-muted-foreground">Remaining payment</p>
+                            <p className="text-sm text-muted-foreground">Pay to driver</p>
                             <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</p>
                           </div>
                           <div className="flex gap-2">

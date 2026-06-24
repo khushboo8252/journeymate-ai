@@ -56,7 +56,7 @@ const en = {
     button: "Get started — it's free",
   },
   footer: {
-    tagline: "The smarter way to travel India.",
+    tagline: "उत्तराखण्ड वालों कु, उत्तराखण्ड का खातिर.",
     rights: "All rights reserved.",
   },
   lang: { en: "English", hi: "हिन्दी" },
@@ -361,7 +361,7 @@ const hi = {
     button: "शुरू करें — यह मुफ्त है",
   },
   footer: {
-    tagline: "भारत यात्रा करने का स्मार्ट तरीका।",
+    tagline: "उत्तराखण्ड वालों कु, उत्तराखण्ड का खातिर।",
     rights: "सर्वाधिकार सुरक्षित।",
   },
   lang: { en: "English", hi: "हिन्दी" },
