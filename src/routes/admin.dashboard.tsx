@@ -15,6 +15,7 @@ import {
   UserCheck,
   UserX,
   X,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
@@ -61,7 +62,26 @@ type User = {
   ifscCode?: string | null;
   earnings?: number;
   isBlocked?: boolean;
+  isApproved?: boolean;
   createdAt: string;
+  drivingLicense?: {
+    frontUrl?: string | null;
+    backUrl?: string | null;
+  };
+  aadharCard?: {
+    frontUrl?: string | null;
+    backUrl?: string | null;
+  };
+  panCard?: {
+    frontUrl?: string | null;
+  };
+  rc?: {
+    frontUrl?: string | null;
+    backUrl?: string | null;
+  };
+  vehicleImage?: {
+    url?: string | null;
+  };
 };
 
 type Ride = {
@@ -122,6 +142,10 @@ function AdminDashboard() {
     driverName: string | null;
     reason: string;
   }>({ open: false, driverId: null, driverName: null, reason: "" });
+  const [viewDialog, setViewDialog] = useState<{
+    open: boolean;
+    driver: User | null;
+  }>({ open: false, driver: null });
 
   useEffect(() => {
     const token = localStorage.getItem("kshira_admin_token");
@@ -465,19 +489,9 @@ function AdminDashboard() {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.driver")}</th>
                       <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.email_contact")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.vehicle_no")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.vehicle")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.bank_account")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.ifsc")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.ride_count")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.completed")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.active")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.pending")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.revenue")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.earnings")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.profile")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.approval")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.actions")}</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle No.</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle Seats</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -499,82 +513,17 @@ function AdminDashboard() {
                           <div className="text-xs text-muted-foreground">{driver.phone || "—"}</div>
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">{driver.vehicleNumber || "—"}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {driver.vehicleSeats ? `${driver.vehicleSeats}-seater` : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{driver.bankAccountNumber || "—"}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{driver.ifscCode || "—"}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{driver.rideCount || 0}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{driver.completedRides || 0}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{driver.activeRides || 0}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{driver.pendingPassengers || 0}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-green-600">₹{((driver.revenue || 0) / 1000).toFixed(1)}k</td>
-                        <td className="px-4 py-3 text-sm font-medium text-blue-600">₹{((driver.earnings || 0) / 1000).toFixed(1)}k</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{driver.vehicleSeats || "—"}</td>
                         <td className="px-4 py-3 text-sm">
-                          {driver.isProfileComplete ? (
-                            <Badge className="bg-green-600 text-xs">{t("admin.drivers.complete")}</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs">{t("admin.drivers.incomplete")}</Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {driver.isApproved ? (
-                            <Badge className="bg-green-600 text-xs">{t("admin.drivers.approved")}</Badge>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">{t("admin.drivers.pending_approval")}</Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="flex gap-1 flex-wrap">
-                            {!driver.isApproved && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleApproveDriver(driver._id)}
-                                  className="h-7 px-2 text-xs bg-green-50 text-green-700 hover:bg-green-100"
-                                >
-                                  {t("admin.drivers.approve")}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRejectDriver(driver._id, driver.fullName)}
-                                  className="h-7 px-2 text-xs bg-red-50 text-red-700 hover:bg-red-100"
-                                >
-                                  {t("admin.drivers.reject")}
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleReleasePayment(driver._id)}
-                              disabled={!driver.revenue || driver.revenue === 0}
-                              className="h-7 px-2 text-xs"
-                            >
-                              {t("admin.drivers.release_payment")}
-                            </Button>
-                            {driver.isBlocked ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleUnblockDriver(driver._id)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                {t("admin.drivers.unblock")}
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleBlockDriver(driver._id)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                {t("admin.drivers.block")}
-                              </Button>
-                            )}
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setViewDialog({ open: true, driver })}
+                            className="h-7 px-2 text-xs"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -785,6 +734,188 @@ function AdminDashboard() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Driver Details Dialog */}
+      <Dialog open={viewDialog.open} onOpenChange={(open) => 
+        setViewDialog(prev => ({ ...prev, open }))
+      }>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              Driver Profile Details
+            </DialogTitle>
+          </DialogHeader>
+          {viewDialog.driver && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 pb-4 border-b">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={viewDialog.driver.avatarUrl || undefined} />
+                  <AvatarFallback className="text-xl">
+                    {viewDialog.driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-lg font-semibold">{viewDialog.driver.fullName}</h3>
+                  <p className="text-sm text-muted-foreground">{viewDialog.driver.email}</p>
+                  <p className="text-sm text-muted-foreground">{viewDialog.driver.phone || "—"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Vehicle Number</Label>
+                  <p className="font-medium">{viewDialog.driver.vehicleNumber || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Vehicle Seats</Label>
+                  <p className="font-medium">{viewDialog.driver.vehicleSeats || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Bank Account</Label>
+                  <p className="font-medium">{viewDialog.driver.bankAccountNumber || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">IFSC Code</Label>
+                  <p className="font-medium">{viewDialog.driver.ifscCode || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Profile Status</Label>
+                  <p className="font-medium">
+                    {viewDialog.driver.isProfileComplete ? (
+                      <Badge className="bg-green-600">Complete</Badge>
+                    ) : (
+                      <Badge variant="outline">Incomplete</Badge>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Approval Status</Label>
+                  <p className="font-medium">
+                    {viewDialog.driver.isApproved ? (
+                      <Badge className="bg-green-600">Approved</Badge>
+                    ) : (
+                      <Badge variant="destructive">Pending Approval</Badge>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Account Status</Label>
+                  <p className="font-medium">
+                    {viewDialog.driver.isBlocked ? (
+                      <Badge variant="destructive">Blocked</Badge>
+                    ) : (
+                      <Badge className="bg-green-600">Active</Badge>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Member Since</Label>
+                  <p className="font-medium">{format(new Date(viewDialog.driver.createdAt), "MMM dd, yyyy")}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Documents</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {viewDialog.driver.drivingLicense?.frontUrl && (
+                    <a href={viewDialog.driver.drivingLicense.frontUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      Driving License (Front)
+                    </a>
+                  )}
+                  {viewDialog.driver.drivingLicense?.backUrl && (
+                    <a href={viewDialog.driver.drivingLicense.backUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      Driving License (Back)
+                    </a>
+                  )}
+                  {viewDialog.driver.aadharCard?.frontUrl && (
+                    <a href={viewDialog.driver.aadharCard.frontUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      Aadhar Card (Front)
+                    </a>
+                  )}
+                  {viewDialog.driver.aadharCard?.backUrl && (
+                    <a href={viewDialog.driver.aadharCard.backUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      Aadhar Card (Back)
+                    </a>
+                  )}
+                  {viewDialog.driver.panCard?.frontUrl && (
+                    <a href={viewDialog.driver.panCard.frontUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      PAN Card
+                    </a>
+                  )}
+                  {viewDialog.driver.rc?.frontUrl && (
+                    <a href={viewDialog.driver.rc.frontUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      RC (Front)
+                    </a>
+                  )}
+                  {viewDialog.driver.rc?.backUrl && (
+                    <a href={viewDialog.driver.rc.backUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      RC (Back)
+                    </a>
+                  )}
+                  {viewDialog.driver.vehicleImage?.url && (
+                    <a href={viewDialog.driver.vehicleImage.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                      Vehicle Image
+                    </a>
+                  )}
+                  {(!viewDialog.driver.drivingLicense?.frontUrl && 
+                    !viewDialog.driver.aadharCard?.frontUrl && 
+                    !viewDialog.driver.panCard?.frontUrl && 
+                    !viewDialog.driver.rc?.frontUrl && 
+                    !viewDialog.driver.vehicleImage?.url) && (
+                    <p className="text-xs text-muted-foreground col-span-2">No documents uploaded</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    handleApproveDriver(viewDialog.driver!._id);
+                    setViewDialog({ open: false, driver: null });
+                  }}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  Approve
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleRejectDriver(viewDialog.driver!._id, viewDialog.driver!.fullName);
+                    setViewDialog({ open: false, driver: null });
+                  }}
+                  variant="outline"
+                  className="flex-1 text-red-600 hover:bg-red-50"
+                >
+                  Reject
+                </Button>
+                {viewDialog.driver.isBlocked ? (
+                  <Button
+                    onClick={() => {
+                      handleUnblockDriver(viewDialog.driver!._id);
+                      setViewDialog({ open: false, driver: null });
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Unblock
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      handleBlockDriver(viewDialog.driver!._id);
+                      setViewDialog({ open: false, driver: null });
+                    }}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    Block
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

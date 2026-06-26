@@ -13,12 +13,13 @@ const router = express.Router();
 // GET /api/rides — search rides
 router.get("/", async (req, res) => {
   try {
-    const { from, to, date, seats = 1, sortBy = "departureAt" } = req.query;
+    const { from, to, pickup, date, seats = 1, sortBy = "departureAt" } = req.query;
 
     const filter = { status: "active", seatsAvailable: { $gte: Number(seats) } };
 
     if (from) filter.origin = { $regex: from, $options: "i" };
     if (to) filter.destination = { $regex: to, $options: "i" };
+    if (pickup) filter.pickupPoints = { $regex: pickup, $options: "i" };
 
     if (date) {
       const start = new Date(date);

@@ -17,6 +17,10 @@ const rideSchema = new mongoose.Schema(
       required: [true, "Destination is required"],
       trim: true,
     },
+    pickupPoints: {
+      type: [String],
+      default: [],
+    },
     departureAt: {
       type: Date,
       required: [true, "Departure date/time is required"],

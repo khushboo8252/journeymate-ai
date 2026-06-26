@@ -43,7 +43,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Autocomplete } from "@/components/ui/autocomplete";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiBooking, ApiUser } from "@/lib/api";
@@ -77,19 +76,16 @@ function DashboardPage() {
   const [myRides, setMyRides] = useState<ApiRide[]>([]);
   const [myBookings, setMyBookings] = useState<BookingWithRide[]>([]);
   const [driverBookings, setDriverBookings] = useState<DriverBooking[]>([]);
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [saving, setSaving] = useState(false);
   const [showApprovalPopup, setShowApprovalPopup] = useState(false);
   const [selectedRideForSeatMap, setSelectedRideForSeatMap] = useState<ApiRide | null>(null);
   const [seatsForMap, setSeatsForMap] = useState<DriverSeat[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
   const isDriver = user?.role === "driver";
 
   // Search functionality for passengers
   const [searchFrom, setSearchFrom] = useState("");
   const [searchTo, setSearchTo] = useState("");
+  const [searchPickup, setSearchPickup] = useState("");
   const [searchDate, setSearchDate] = useState("");
   const [searchRides, setSearchRides] = useState<ApiRide[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -97,8 +93,6 @@ function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    setFullName(user.fullName ?? "");
-    setPhone(user.phone ?? "");
     fetchData();
 
     // Connect to WebSocket
@@ -292,19 +286,6 @@ function DashboardPage() {
     setSeatsForMap([]);
   };
 
-  const saveProfile = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      await api.put("/api/profile", { fullName, phone });
-      toast.success("Profile updated!");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const cancelRide = async (id: string) => {
     try {
       await api.patch(`/api/rides/${id}/cancel`);
@@ -378,6 +359,7 @@ function DashboardPage() {
       const qs = new URLSearchParams();
       if (searchFrom.trim()) qs.set("from", searchFrom.trim());
       if (searchTo.trim()) qs.set("to", searchTo.trim());
+      if (searchPickup.trim()) qs.set("pickup", searchPickup.trim());
       // Only send date if it's explicitly selected (not empty)
       if (searchDate && searchDate.trim()) {
         qs.set("date", searchDate);
@@ -417,8 +399,8 @@ function DashboardPage() {
     );
   }
 
-  const initials = fullName
-    ? fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
+  const initials = user.fullName
+    ? user.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
     : user.email[0]?.toUpperCase() ?? "?";
 
   return (
@@ -429,14 +411,14 @@ function DashboardPage() {
           {/* Profile header */}
           <div className="glass rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center gap-5">
             <Avatar className="h-16 w-16 border-2 border-primary/30">
-              <AvatarImage src={(user as any).avatarUrl || undefined} alt={fullName || "User"} />
+              <AvatarImage src={(user as any).avatarUrl || undefined} alt={user.fullName || "User"} />
               <AvatarFallback className="text-xl bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
-                {fullName ? fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
+                {user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 text-center sm:text-left">
               <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-                <h1 className="text-2xl font-bold">{fullName || "My Account"}</h1>
+                <h1 className="text-2xl font-bold">{user.fullName || "My Account"}</h1>
                 <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                   isDriver
                     ? "bg-gradient-to-r from-primary/20 to-accent/20 text-primary border border-primary/30"
@@ -568,7 +550,6 @@ function DashboardPage() {
                 <TabsTrigger value="passengers" className="flex items-center gap-1.5 text-sm sm:text-base"><Users className="h-4 w-4" />{t("dashboard.passengers")} ({driverBookings.filter(b => b.status === "confirmed").length})</TabsTrigger>
               )}
               <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-sm sm:text-base"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
-              <TabsTrigger value="profile" className="flex items-center gap-1.5 text-sm sm:text-base"><User className="h-4 w-4" />{t("auth.full_name")}</TabsTrigger>
             </TabsList>
 
             {/* SEARCH RIDES — passengers only */}
@@ -589,6 +570,13 @@ function DashboardPage() {
                         {t("search.to")}
                       </label>
                       <Autocomplete value={searchTo} onChange={setSearchTo} placeholder={t("search.to_ph")} className="w-full" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
+                        <MapPin className="h-3 w-3" />
+                        Pickup Point
+                      </label>
+                      <Autocomplete value={searchPickup} onChange={setSearchPickup} placeholder="Enter pickup location" className="w-full" />
                     </div>
                     <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2 sm:col-span-2 lg:col-span-1">
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
@@ -693,7 +681,7 @@ function DashboardPage() {
                       </div>
                       <div className="flex flex-wrap gap-2 sm:gap-3 mt-1.5 text-xs sm:text-sm text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}</span>
-                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{Math.round(calculateFinalPrice(ride.pricePerSeat))}/{t("ride_details.seat")}</span>
+                        <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{ride.pricePerSeat}/{t("ride_details.seat")}</span>
                         <span>{ride.seatsAvailable}/{ride.seatsTotal} {t("ride_details.seats_available")}</span>
                       </div>
                     </div>
@@ -794,7 +782,7 @@ function DashboardPage() {
                           <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""}</span>
                           {ride && (
                             <span className="flex items-center gap-1">
-                              <IndianRupee className="h-3 w-3" />{Math.round(calculateFinalPrice(ride.pricePerSeat) * booking.seats)} total
+                              <IndianRupee className="h-3 w-3" />{ride.pricePerSeat * booking.seats} total
                             </span>
                           )}
                         </div>
@@ -863,63 +851,6 @@ function DashboardPage() {
                   </div>
                 );
               })}
-            </TabsContent>
-
-            {/* PROFILE */}
-            <TabsContent value="profile">
-              <div className="glass rounded-2xl p-6 space-y-5 max-w-md">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Edit profile</h2>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                    isDriver
-                      ? "bg-gradient-to-r from-primary/20 to-accent/20 text-primary border border-primary/30"
-                      : "bg-muted text-muted-foreground border border-border/40"
-                  }`}>
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    {isDriver ? "Driver account" : "Passenger account"}
-                  </span>
-                </div>
-                <Separator />
-                <div className="space-y-1.5">
-                  <Label>Full name</Label>
-                  <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />Phone number</Label>
-                  <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98765 43210" type="tel" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Email</Label>
-                  <Input value={user.email} disabled className="opacity-60" />
-                </div>
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="terms"
-                    checked={termsAccepted}
-                    onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
-                    className="mt-0.5"
-                  />
-                  <label
-                    htmlFor="terms"
-                    className="text-sm text-muted-foreground leading-tight cursor-pointer"
-                  >
-                    I agree to the{" "}
-                    <Link to="/terms" className="text-primary hover:underline">
-                      Terms and Conditions
-                    </Link>
-                  </label>
-                </div>
-                <Button onClick={saveProfile} disabled={saving || !termsAccepted} className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">
-                  {saving ? "Saving…" : "Save changes"}
-                </Button>
-                {isDriver && (
-                  <Link to="/driver-setup">
-                    <Button variant="outline" className="w-full flex items-center gap-2 mt-1">
-                      <ExternalLink className="h-4 w-4" />Update driver &amp; bank details
-                    </Button>
-                  </Link>
-                )}
-              </div>
             </TabsContent>
           </Tabs>
         </motion.div>

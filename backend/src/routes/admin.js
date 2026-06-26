@@ -59,7 +59,7 @@ router.get("/users", adminAuth, async (req, res) => {
 router.get("/drivers", adminAuth, async (req, res) => {
   try {
     const drivers = await User.find({ role: "driver" })
-      .select("+bankAccountNumber +ifscCode")
+      .select("+bankAccountNumber +ifscCode drivingLicense aadharCard panCard rc vehicleImage")
       .sort({ createdAt: -1 });
 
     // Get detailed stats for each driver
