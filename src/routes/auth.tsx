@@ -62,18 +62,7 @@ function SignInForm() {
       setToken(data.token);
       setUser(data.user);
       toast.success(t("auth.welcome_back"));
-      // If user is a driver and hasn't completed profile, redirect to driver-setup
-      if (data.user.role === "driver") {
-        if (!(data.user as any).isProfileComplete) {
-          navigate({ to: "/driver-setup" });
-        } else if (data.user.isApproved) {
-          navigate({ to: "/publish" });
-        } else {
-          navigate({ to: "/dashboard" });
-        }
-      } else {
-        navigate({ to: "/dashboard" });
-      }
+      navigate({ to: "/dashboard" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("auth.signin_failed"));
     }
@@ -126,11 +115,7 @@ function SignUpForm() {
       setToken(data.token);
       setUser(data.user);
       toast.success(t("auth.account_created"));
-      if (data.user.role === "driver") {
-        navigate({ to: "/driver-setup" });
-      } else {
-        navigate({ to: "/dashboard" });
-      }
+      navigate({ to: "/dashboard" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("auth.signup_failed"));
     }
@@ -199,17 +184,7 @@ function AuthPage() {
   // Redirect based on user role and profile status
   useEffect(() => {
     if (!loading && user) {
-      if (user.role === "driver") {
-        if (!(user as any).isProfileComplete) {
-          navigate({ to: "/driver-setup" });
-        } else if (user.isApproved) {
-          navigate({ to: "/publish" });
-        } else {
-          navigate({ to: "/dashboard" });
-        }
-      } else {
-        navigate({ to: "/dashboard" });
-      }
+      navigate({ to: "/dashboard" });
     }
   }, [loading, user, navigate]);
 
