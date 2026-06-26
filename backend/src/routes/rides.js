@@ -91,6 +91,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/rides — create ride (drivers only)
+// POST /api/rides — create ride (drivers only)
 router.post(
   "/",
   protect,
@@ -102,7 +103,8 @@ router.post(
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
-    body("seatsTotal").optional().isInt({ min: 5, max: 15 }).withMessage("Total seats must be between 5 and 15"),
+    // [FIX]: Ab express-validator hardcoded checks ke bajay minimum boundary 2 secure rakhega
+    body("seatsTotal").optional().isInt({ min: 2, max: 15 }).withMessage("Total seats must be at least 2"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -113,13 +115,14 @@ router.post(
     const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan", seatsTotal } = req.body;
 
     try {
-      // Check if driver is approved by admin
+      // Check driver details and approved stats
       const driver = await User.findById(req.user._id);
       console.log("Driver status check:", {
         driverId: req.user._id,
         isApproved: driver?.isApproved,
         isProfileComplete: driver?.isProfileComplete,
         role: driver?.role,
+        vehicleSeats: driver?.vehicleSeats
       });
 
       if (!driver.isApproved) {
@@ -128,8 +131,20 @@ router.post(
         });
       }
 
-      // Use user-selected seatsTotal or fallback to vehicle type default
+      // Fallback range handling configuration
       const finalSeatsTotal = seatsTotal ? Number(seatsTotal) : getTotalSeats(vehicleType);
+
+      // 🚨 [STRICT BUSINESS LOGIC VALIDATION CHECK]: 
+      if (finalSeatsTotal < 2) {
+        return res.status(400).json({ message: "Minimum 2 seats are required including the driver." });
+      }
+
+      const maxCarCapacity = driver.vehicleSeats ? Number(driver.vehicleSeats) : 5;
+      if (finalSeatsTotal > maxCarCapacity) {
+        return res.status(400).json({ 
+          message: `Aap apni gaadi ki registered capacity (${maxCarCapacity} seats) se zyada seats select nahi kar sakte.` 
+        });
+      }
 
       const ride = await Ride.create({
         driverId: req.user._id,

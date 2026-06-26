@@ -109,14 +109,11 @@ function DashboardPage() {
         const userData = await api.get<{ user: ApiUser }>("/api/profile");
         const updatedUser = userData.user;
         
-        // Update local user state if needed
         if (isDriver && updatedUser.isApproved && !updatedUser.hasSeenApprovalNotification) {
           setShowApprovalPopup(true);
 
-          // Auto-dismiss after 10 seconds
           const timer = setTimeout(() => {
             setShowApprovalPopup(false);
-            // Mark as seen when auto-dismissed
             api.post("/api/profile/notification-seen", {}).catch(console.error);
           }, 10000);
 
@@ -167,7 +164,6 @@ function DashboardPage() {
       fetchData();
     });
 
-    // Ride completion confirmation events
     socket.on("driver_confirmed_completion", (data) => {
       if (!isDriver) {
         toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
@@ -187,7 +183,6 @@ function DashboardPage() {
       fetchData();
     });
 
-    // Booking transfer notifications
     socket.on("booking_transferred", (data) => {
       if (!isDriver) {
         toast.success(data.message || "Your booking has been transferred to driver's next ride.");
@@ -202,7 +197,6 @@ function DashboardPage() {
       }
     });
 
-    // Cancellation count and blocking notifications
     socket.on("cancellation_count_updated", (data) => {
       if (isDriver) {
         toast.warning(data.message || `You have cancelled ${data.cancellationCount} ride(s).`);
@@ -216,7 +210,6 @@ function DashboardPage() {
         fetchData();
       }
     });
-
 
     return () => {
       socket.off("driver_approved");
@@ -267,21 +260,26 @@ function DashboardPage() {
     try {
       setLoadingSeats(true);
       const response = await api.get<{ seats: DriverSeat[] }>(`/api/rides/${rideId}/seats/passengers`);
-      setSeatsForMap(response.seats);
+      // Agar backend se wrap hokar aa rha hai toh safely save karein
+      setSeatsForMap(Array.isArray(response) ? response : response.seats || []);
     } catch (err) {
       console.error("Failed to fetch seats:", err);
       toast.error("Failed to load seat map");
+      setSeatsForMap([]); // Error state me safe fall back
     } finally {
       setLoadingSeats(false);
     }
   };
 
   const openSeatMap = (ride: ApiRide) => {
+    // 1. Naya modal kholne se pehle state bilkul clean karein taaki purani ride ka data na dikhe
+    setSeatsForMap([]); 
     setSelectedRideForSeatMap(ride);
     fetchSeatsForRide(ride._id);
   };
 
   const closeSeatMap = () => {
+    // 2. Modal close hote hi states ko reset karein
     setSelectedRideForSeatMap(null);
     setSeatsForMap([]);
   };
@@ -332,24 +330,15 @@ function DashboardPage() {
     }
   };
 
-
   const handlePopupClick = async () => {
-    // Mark notification as seen
     await api.post("/api/profile/notification-seen", {});
     setShowApprovalPopup(false);
     router.navigate({ to: "/publish" });
   };
 
   const handlePopupDismiss = async () => {
-    // Mark notification as seen
     await api.post("/api/profile/notification-seen", {});
     setShowApprovalPopup(false);
-  };
-
-  // Calculate final price for passengers: base + 5% platform fee (no GST)
-  const calculateFinalPrice = (basePrice: number): number => {
-    const platformFee = basePrice * 0.05; // 5%
-    return basePrice + platformFee;
   };
 
   const handleSearch = async () => {
@@ -360,14 +349,9 @@ function DashboardPage() {
       if (searchFrom.trim()) qs.set("from", searchFrom.trim());
       if (searchTo.trim()) qs.set("to", searchTo.trim());
       if (searchPickup.trim()) qs.set("pickup", searchPickup.trim());
-      // Only send date if it's explicitly selected (not empty)
       if (searchDate && searchDate.trim()) {
         qs.set("date", searchDate);
-        console.log("Date parameter being sent:", searchDate);
-      } else {
-        console.log("Date parameter NOT being sent (empty)");
       }
-      console.log("Search query string:", qs.toString());
       const data = await api.get<ApiRide[]>(`/api/rides?${qs.toString()}`);
       setSearchRides(Array.isArray(data) ? data : []);
     } catch {
@@ -399,15 +383,12 @@ function DashboardPage() {
     );
   }
 
-  const initials = user.fullName
-    ? user.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
-    : user.email[0]?.toUpperCase() ?? "?";
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 container mx-auto px-4 md:px-6 py-10 max-w-4xl">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          
           {/* Profile header */}
           <div className="glass rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center gap-5">
             <Avatar className="h-16 w-16 border-2 border-primary/30">
@@ -492,7 +473,7 @@ function DashboardPage() {
             </motion.div>
           )}
 
-          {/* Cancellation count warning for drivers */}
+          {/* Cancellation warning */}
           {isDriver && (user as any).rideCancellationCount > 0 && !(user as any).isBlocked && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -531,7 +512,7 @@ function DashboardPage() {
             </motion.div>
           )}
 
-          <Tabs defaultValue={isDriver ? "rides" : (!isDriver ? "search" : "bookings")}>
+          <Tabs defaultValue={isDriver ? "rides" : "search"}>
             <TabsList className="mb-6 bg-muted/40 flex-wrap h-auto gap-1 w-full sm:w-auto">
               {isDriver && (
                 <Link to="/publish">
@@ -552,7 +533,7 @@ function DashboardPage() {
               <TabsTrigger value="bookings" className="flex items-center gap-1.5 text-sm sm:text-base"><Ticket className="h-4 w-4" />{t("dashboard.my_bookings")} ({myBookings.length})</TabsTrigger>
             </TabsList>
 
-            {/* SEARCH RIDES — passengers only */}
+            {/* SEARCH RIDES */}
             {!isDriver && (
               <TabsContent value="search" className="space-y-4">
                 <div className="glass rounded-2xl p-4 sm:p-6">
@@ -645,30 +626,15 @@ function DashboardPage() {
               </TabsContent>
             )}
 
-            {/* MY RIDES — drivers only */}
+            {/* MY RIDES */}
             <TabsContent value="rides" className="space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <p className="text-sm text-muted-foreground">{t("dashboard.my_rides")}</p>
-                {isDriver && (user as any).isApproved && (
-                  <Link to="/publish" className="w-full sm:w-auto">
-                    <Button size="sm" className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90">
-                      <Car className="h-4 w-4 mr-1" />{t("dashboard.publish_ride")}
-                    </Button>
-                  </Link>
-                )}
               </div>
               {myRides.length === 0 && (
                 <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Car className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">{t("dashboard.no_rides_desc")}</p>
-                  {isDriver && (user as any).isApproved && (
-                    <Link to="/publish" className="mt-4 inline-block">
-                      <Button size="sm" variant="outline">{t("dashboard.publish_ride")}</Button>
-                    </Link>
-                  )}
-                  {isDriver && !(user as any).isApproved && (
-                    <p className="text-xs text-muted-foreground mt-4">Your account is pending admin approval to publish rides.</p>
-                  )}
                 </div>
               )}
               {myRides.map(ride => (
@@ -685,53 +651,50 @@ function DashboardPage() {
                         <span>{ride.seatsAvailable}/{ride.seatsTotal} {t("ride_details.seats_available")}</span>
                       </div>
                     </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={ride.status === "active" ? "default" : "secondary"} className={ride.status === "active" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
-                      {ride.status}
-                    </Badge>
-                    {ride.status === "active" && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)} className="text-xs sm:text-sm">
-                          <Users className="h-4 w-4 mr-1" />{t("dashboard.seat_map")}
-                        </Button>
-                        <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm">
-                          <Check className="h-4 w-4 mr-1" />{t("dashboard.confirm_complete")}
-                        </Button>
-                        {(() => {
-                          const now = new Date();
-                          const departureTime = new Date(ride.departureAt);
-                          const hoursUntilDeparture = (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-                          const canCancel = hoursUntilDeparture >= 1;
-                          return (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => cancelRide(ride._id)}
-                              disabled={!canCancel}
-                              className={`text-destructive hover:text-destructive hover:bg-destructive/10 ${!canCancel ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              title={!canCancel ? "Ride can only be cancelled at least 1 hour before departure" : ""}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          );
-                        })()}
-                      </>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={ride.status === "active" ? "default" : "secondary"} className={ride.status === "active" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
+                        {ride.status}
+                      </Badge>
+                      {ride.status === "active" && (
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => openSeatMap(ride)} className="text-xs sm:text-sm">
+                            <Users className="h-4 w-4 mr-1" />{t("dashboard.seat_map")}
+                          </Button>
+                          <Button size="sm" variant="default" onClick={() => confirmRide(ride._id)} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm">
+                            <Check className="h-4 w-4 mr-1" />{t("dashboard.confirm_complete")}
+                          </Button>
+                          {(() => {
+                            const now = new Date();
+                            const departureTime = new Date(ride.departureAt);
+                            const hoursUntilDeparture = (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+                            const canCancel = hoursUntilDeparture >= 1;
+                            return (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => cancelRide(ride._id)}
+                                disabled={!canCancel}
+                                className={`text-destructive hover:text-destructive hover:bg-destructive/10 ${!canCancel ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={!canCancel ? "Ride can only be cancelled at least 1 hour before departure" : ""}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            );
+                          })()}
+                        </>
+                      )}
+                    </div>
                   </div>
-                  </div>
-                  {/* Location tracking for active rides */}
                   {ride.status === "active" && (
                     <div className="pt-3 border-t border-border/30">
-                      <LocationTracker
-                        rideId={ride._id}
-                      />
+                      <LocationTracker rideId={ride._id} />
                     </div>
                   )}
                 </div>
               ))}
             </TabsContent>
 
-            {/* PASSENGERS — driver view of who booked their rides */}
+            {/* PASSENGERS */}
             {isDriver && (
               <TabsContent value="passengers" className="space-y-4">
                 <p className="text-sm text-muted-foreground">{t("dashboard.passengers")}</p>
@@ -739,22 +702,18 @@ function DashboardPage() {
                   <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                     <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                     <p className="text-muted-foreground">{t("dashboard.no_rides")}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t("dashboard.no_rides_desc")}</p>
                   </div>
                 )}
                 {driverBookings.map(booking => {
                   const passenger = booking.passengerId;
                   const ride = typeof booking.rideId === "object" ? booking.rideId : null;
-                  const passengerInitials = passenger?.fullName
-                    ? passenger.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
-                    : "?";
                   return (
                     <div key={booking._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10 border border-border/40">
                           <AvatarImage src={(passenger as any)?.avatarUrl ?? undefined} />
                           <AvatarFallback className="text-sm bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
-                            {passengerInitials}
+                            {passenger?.fullName ? passenger.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
                           </AvatarFallback>
                         </Avatar>
                         <div>
@@ -787,10 +746,7 @@ function DashboardPage() {
                           )}
                         </div>
                       </div>
-                      <Badge
-                        variant={booking.status === "confirmed" ? "default" : "secondary"}
-                        className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}
-                      >
+                      <Badge variant={booking.status === "confirmed" ? "default" : "secondary"} className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
                         {booking.status}
                       </Badge>
                     </div>
@@ -801,21 +757,11 @@ function DashboardPage() {
 
             {/* MY BOOKINGS */}
             <TabsContent value="bookings" className="space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <p className="text-sm text-muted-foreground">{t("dashboard.my_bookings")}</p>
-                <Link to="/search" className="w-full sm:w-auto">
-                  <Button size="sm" variant="outline" className="w-full sm:w-auto flex items-center gap-1.5">
-                    <Search className="h-4 w-4" />{t("search.button")}
-                  </Button>
-                </Link>
-              </div>
+              <p className="text-sm text-muted-foreground">{t("dashboard.my_bookings")}</p>
               {myBookings.length === 0 && (
                 <div className="text-center py-12 sm:py-16 glass rounded-2xl">
                   <Ticket className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-muted-foreground">{t("dashboard.no_rides")}</p>
-                  <Link to="/search" className="mt-4 inline-block">
-                    <Button size="sm" variant="outline">{t("search.button")}</Button>
-                  </Link>
                 </div>
               )}
               {myBookings.map(booking => {

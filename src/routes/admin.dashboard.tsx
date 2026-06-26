@@ -24,7 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -255,78 +262,99 @@ function AdminDashboard() {
     }
   };
 
-  const handleReleasePayment = async (driverId: string) => {
-    if (!confirm(t("admin.confirm_release_payment"))) return;
-    const token = localStorage.getItem("kshira_admin_token");
-    if (!token) return;
+const handleBlockDriver = async (driverId: string) => {
+  if (!confirm(t("admin.confirm_block_driver"))) return;
+  const token = localStorage.getItem("kshira_admin_token");
+  if (!token) return;
 
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/release-payment`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(t("admin.release_payment_failed"));
-      toast.success(t("admin.payment_released"));
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("admin.release_payment_failed"));
-    }
-  };
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/block`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(t("admin.block_driver_failed"));
+    
+    toast.success(t("admin.driver_blocked"));
+    
+    // 🚨 [REAL-TIME FIX]: Modal ke andar instantly text badalne ke liye
+    setViewDialog(prev => {
+      if (prev.driver && prev.driver._id === driverId) {
+        return {
+          ...prev,
+          driver: { ...prev.driver, isBlocked: true }
+        };
+      }
+      return prev;
+    });
 
-  const handleBlockDriver = async (driverId: string) => {
-    if (!confirm(t("admin.confirm_block_driver"))) return;
-    const token = localStorage.getItem("kshira_admin_token");
-    if (!token) return;
+    fetchData(); // Background me table refresh karein
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : t("admin.block_driver_failed"));
+  }
+};
 
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/block`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(t("admin.block_driver_failed"));
-      toast.success(t("admin.driver_blocked"));
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("admin.block_driver_failed"));
-    }
-  };
+const handleUnblockDriver = async (driverId: string) => {
+  if (!confirm(t("admin.confirm_unblock_driver"))) return;
+  const token = localStorage.getItem("kshira_admin_token");
+  if (!token) return;
 
-  const handleUnblockDriver = async (driverId: string) => {
-    if (!confirm(t("admin.confirm_unblock_driver"))) return;
-    const token = localStorage.getItem("kshira_admin_token");
-    if (!token) return;
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/unblock`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(t("admin.unblock_driver_failed"));
+    
+    toast.success(t("admin.driver_unblocked"));
+    
+    // 🚨 [REAL-TIME FIX]: Modal ke andar instantly text badalne ke liye
+    setViewDialog(prev => {
+      if (prev.driver && prev.driver._id === driverId) {
+        return {
+          ...prev,
+          driver: { ...prev.driver, isBlocked: false }
+        };
+      }
+      return prev;
+    });
 
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/unblock`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(t("admin.unblock_driver_failed"));
-      toast.success(t("admin.driver_unblocked"));
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("admin.unblock_driver_failed"));
-    }
-  };
+    fetchData(); // Background me table refresh karein
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : t("admin.unblock_driver_failed"));
+  }
+};
 
-  const handleApproveDriver = async (driverId: string) => {
-    if (!confirm(t("admin.confirm_approve_driver"))) return;
-    const token = localStorage.getItem("kshira_admin_token");
-    if (!token) return;
+ const handleApproveDriver = async (driverId: string) => {
+  if (!confirm(t("admin.confirm_approve_driver"))) return;
+  const token = localStorage.getItem("kshira_admin_token");
+  if (!token) return;
 
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/approve`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(t("admin.approve_driver_failed"));
-      toast.success(t("admin.driver_approved"));
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("admin.approve_driver_failed"));
-    }
-  };
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers/${driverId}/approve`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(t("admin.approve_driver_failed"));
+    
+    toast.success(t("admin.driver_approved"));
+    
+    // 🚨 [REAL-TIME FIX]: Pehle viewDialog state ko update karein taaki modal me instantly status badal jaye
+    setViewDialog(prev => {
+      if (prev.driver && prev.driver._id === driverId) {
+        return {
+          ...prev,
+          driver: { ...prev.driver, isApproved: true }
+        };
+      }
+      return prev;
+    });
 
+    // Poori table list ko background me fresh load karein
+    fetchData(); 
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : t("admin.approve_driver_failed"));
+  }
+};
   const handleRejectDriver = (driverId: string, driverName: string) => {
     setRejectionDialog({
       open: true,
@@ -424,263 +452,268 @@ function AdminDashboard() {
 
           {/* Content */}
           <div className="flex-1 min-w-0">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              {activeTab === "stats" && stats && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-6 rounded-xl border bg-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t("admin.stats.users")}</p>
+                        <p className="text-3xl font-bold">{stats.users}</p>
+                      </div>
+                      <Users className="h-8 w-8 text-primary opacity-20" />
+                    </div>
+                  </div>
+                  <div className="p-6 rounded-xl border bg-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t("admin.stats.rides")}</p>
+                        <p className="text-3xl font-bold">{stats.rides}</p>
+                      </div>
+                      <Car className="h-8 w-8 text-primary opacity-20" />
+                    </div>
+                  </div>
+                  <div className="p-6 rounded-xl border bg-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t("admin.stats.bookings")}</p>
+                        <p className="text-3xl font-bold">{stats.bookings}</p>
+                      </div>
+                      <Calendar className="h-8 w-8 text-primary opacity-20" />
+                    </div>
+                  </div>
+                  <div className="p-6 rounded-xl border bg-card">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{t("admin.stats.active")}</p>
+                      <p className="text-3xl font-bold text-green-600">{stats.activeRides}</p>
+                    </div>
+                  </div>
+                  <div className="p-6 rounded-xl border bg-card">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{t("admin.stats.completed")}</p>
+                      <p className="text-3xl font-bold text-blue-600">{stats.completedRides}</p>
+                    </div>
+                  </div>
+                  <div className="p-6 rounded-xl border bg-card">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{t("admin.stats.cancelled")}</p>
+                      <p className="text-3xl font-bold text-red-600">{stats.cancelledRides}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {activeTab === "stats" && stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="p-6 rounded-xl border bg-card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{t("admin.stats.users")}</p>
-                    <p className="text-3xl font-bold">{stats.users}</p>
-                  </div>
-                  <Users className="h-8 w-8 text-primary opacity-20" />
-                </div>
-              </div>
-              <div className="p-6 rounded-xl border bg-card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{t("admin.stats.rides")}</p>
-                    <p className="text-3xl font-bold">{stats.rides}</p>
-                  </div>
-                  <Car className="h-8 w-8 text-primary opacity-20" />
-                </div>
-              </div>
-              <div className="p-6 rounded-xl border bg-card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{t("admin.stats.bookings")}</p>
-                    <p className="text-3xl font-bold">{stats.bookings}</p>
-                  </div>
-                  <Calendar className="h-8 w-8 text-primary opacity-20" />
-                </div>
-              </div>
-              <div className="p-6 rounded-xl border bg-card">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t("admin.stats.active")}</p>
-                  <p className="text-3xl font-bold text-green-600">{stats.activeRides}</p>
-                </div>
-              </div>
-              <div className="p-6 rounded-xl border bg-card">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t("admin.stats.completed")}</p>
-                  <p className="text-3xl font-bold text-blue-600">{stats.completedRides}</p>
-                </div>
-              </div>
-              <div className="p-6 rounded-xl border bg-card">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t("admin.stats.cancelled")}</p>
-                  <p className="text-3xl font-bold text-red-600">{stats.cancelledRides}</p>
-                </div>
-              </div>
-            </div>
-          )}
+              {activeTab === "drivers" && (
+                <div className="rounded-xl border bg-card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.driver")}</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.email_contact")}</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle No.</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle Seats</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drivers.map((driver) => {
+                          const driverInitials = driver?.fullName 
+                            ? driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()
+                            : driver?.email?.[0]?.toUpperCase() || "?";
 
-          {activeTab === "drivers" && (
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.driver")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">{t("admin.drivers.email_contact")}</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle No.</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Vehicle Seats</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium whitespace-nowrap">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {drivers.map((driver) => (
-                      <tr key={driver._id} className="border-t">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={driver.avatarUrl || undefined} />
-                              <AvatarFallback className="text-xs">
-                                {driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium text-sm">{driver.fullName}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="text-xs text-muted-foreground">{driver.email}</div>
-                          <div className="text-xs text-muted-foreground">{driver.phone || "—"}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{driver.vehicleNumber || "—"}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{driver.vehicleSeats || "—"}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewDialog({ open: true, driver })}
-                            className="h-7 px-2 text-xs"
-                          >
-                            <Eye className="h-3 w-3 mr-1" />
-                            View
-                          </Button>
-                        </td>
+                          return (
+                            <tr key={driver._id} className="border-t">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarImage src={driver.avatarUrl || undefined} />
+                                    <AvatarFallback className="text-xs font-bold">
+                                      {driverInitials}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium text-sm">{driver.fullName || "No Name Provided"}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <div className="text-xs text-muted-foreground">{driver.email}</div>
+                                <div className="text-xs text-muted-foreground">{driver.phone || "—"}</div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-muted-foreground">{driver.vehicleNumber || "—"}</td>
+                              <td className="px-4 py-3 text-sm text-muted-foreground">{driver.vehicleSeats || "—"}</td>
+                              <td className="px-4 py-3 text-sm">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setViewDialog({ open: true, driver })}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  View
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "passengers" && (
+                <div className="rounded-xl border bg-card overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.name")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.email")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.admin")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.created")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.actions")}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                    </thead>
+                    <tbody>
+                      {users.filter(u => u.role === "passenger").map((user) => (
+                        <tr key={user._id} className="border-t">
+                          <td className="px-4 py-3 text-sm">{user.fullName || "No Name"}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{user.email}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {user.isAdmin ? <Badge className="bg-primary">{t("admin.passengers.yes")}</Badge> : <Badge variant="outline">{t("admin.passengers.no")}</Badge>}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {user.createdAt ? format(new Date(user.createdAt), "MMM dd, yyyy") : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteUser(user._id)}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-          {activeTab === "passengers" && (
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.name")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.email")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.admin")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.created")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.passengers.actions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.filter(u => u.role === "passenger").map((user) => (
-                    <tr key={user._id} className="border-t">
-                      <td className="px-4 py-3 text-sm">{user.fullName}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{user.email}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {user.isAdmin ? <Badge className="bg-primary">{t("admin.passengers.yes")}</Badge> : <Badge variant="outline">{t("admin.passengers.no")}</Badge>}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {format(new Date(user.createdAt), "MMM dd, yyyy")}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteUser(user._id)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+              {activeTab === "rides" && (
+                <div className="rounded-xl border bg-card overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.route")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.driver")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.departure")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.status")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rides.map((ride) => (
+                        <tr key={ride._id} className="border-t">
+                          <td className="px-4 py-3 text-sm">
+                            <div>
+                              <p className="font-medium">{ride.origin} → {ride.destination}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {ride.seatsAvailable}/{ride.seatsTotal} seats · ₹{ride.pricePerSeat}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{ride.driverId?.fullName || "Unknown Driver"}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {ride.departureAt ? format(new Date(ride.departureAt), "MMM dd, HH:mm") : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Badge
+                              variant={
+                                ride.status === "active"
+                                  ? "default"
+                                  : ride.status === "completed"
+                                  ? "secondary"
+                                  : "destructive"
+                              }
+                            >
+                              {ride.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteRide(ride._id)}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-          {activeTab === "rides" && (
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.route")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.driver")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.departure")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.status")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.rides.actions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rides.map((ride) => (
-                    <tr key={ride._id} className="border-t">
-                      <td className="px-4 py-3 text-sm">
-                        <div>
-                          <p className="font-medium">{ride.origin} → {ride.destination}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {ride.seatsAvailable}/{ride.seatsTotal} seats · ₹{ride.pricePerSeat}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{ride.driverId.fullName}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {format(new Date(ride.departureAt), "MMM dd, HH:mm")}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <Badge
-                          variant={
-                            ride.status === "active"
-                              ? "default"
-                              : ride.status === "completed"
-                              ? "secondary"
-                              : "destructive"
-                          }
-                        >
-                          {ride.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteRide(ride._id)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {activeTab === "bookings" && (
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.passenger")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.ride")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.seats")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.status")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.booked")}</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.actions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.map((booking) => (
-                    <tr key={booking._id} className="border-t">
-                      <td className="px-4 py-3 text-sm">
-                        <div>
-                          <p className="font-medium">{booking.passengerId.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{booking.passengerId.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {booking.rideId.origin} → {booking.rideId.destination}
-                      </td>
-                      <td className="px-4 py-3 text-sm">{booking.seats}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <Badge variant={booking.status === "confirmed" ? "default" : "secondary"}>
-                          {booking.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {format(new Date(booking.createdAt), "MMM dd, HH:mm")}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteBooking(booking._id)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </motion.div>
+              {activeTab === "bookings" && (
+                <div className="rounded-xl border bg-card overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.passenger")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.ride")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.seats")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.status")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.booked")}</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">{t("admin.bookings.actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bookings.map((booking) => (
+                        <tr key={booking._id} className="border-t">
+                          <td className="px-4 py-3 text-sm">
+                            <div>
+                              <p className="font-medium">{booking.passengerId?.fullName || "No Name"}</p>
+                              <p className="text-xs text-muted-foreground">{booking.passengerId?.email || "—"}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {booking.rideId ? `${booking.rideId.origin} → ${booking.rideId.destination}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm">{booking.seats}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <Badge variant={booking.status === "confirmed" ? "default" : "secondary"}>
+                              {booking.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {booking.createdAt ? format(new Date(booking.createdAt), "MMM dd, HH:mm") : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteBooking(booking._id)}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </motion.div>
           </div>
         </div>
       </main>
@@ -696,11 +729,14 @@ function AdminDashboard() {
               <UserX className="h-5 w-5 text-red-600" />
               Reject Driver Application
             </DialogTitle>
+            <DialogDescription className="hidden">
+              Form to provide a rationale description for rejecting the application.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <p className="text-sm text-muted-foreground">
-                You are rejecting the driver application for <strong>{rejectionDialog.driverName}</strong>.
+                You are rejecting the driver application for <strong>{rejectionDialog.driverName || "This Driver"}</strong>.
               </p>
             </div>
             <div className="space-y-2">
@@ -747,18 +783,23 @@ function AdminDashboard() {
               <UserCheck className="h-5 w-5 text-primary" />
               Driver Profile Details
             </DialogTitle>
+            <DialogDescription className="hidden">
+              Detailed view of driver document validation variables.
+            </DialogDescription>
           </DialogHeader>
           {viewDialog.driver && (
             <div className="space-y-4">
               <div className="flex items-center gap-4 pb-4 border-b">
                 <Avatar className="h-16 w-16">
                   <AvatarImage src={viewDialog.driver.avatarUrl || undefined} />
-                  <AvatarFallback className="text-xl">
-                    {viewDialog.driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                  <AvatarFallback className="text-xl font-bold">
+                    {viewDialog.driver.fullName 
+                      ? viewDialog.driver.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() 
+                      : viewDialog.driver.email?.[0]?.toUpperCase() || "?"}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="text-lg font-semibold">{viewDialog.driver.fullName}</h3>
+                  <h3 className="text-lg font-semibold">{viewDialog.driver.fullName || "No Name Provided"}</h3>
                   <p className="text-sm text-muted-foreground">{viewDialog.driver.email}</p>
                   <p className="text-sm text-muted-foreground">{viewDialog.driver.phone || "—"}</p>
                 </div>
@@ -813,7 +854,9 @@ function AdminDashboard() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Member Since</Label>
-                  <p className="font-medium">{format(new Date(viewDialog.driver.createdAt), "MMM dd, yyyy")}</p>
+                  <p className="font-medium">
+                    {viewDialog.driver.createdAt ? format(new Date(viewDialog.driver.createdAt), "MMM dd, yyyy") : "—"}
+                  </p>
                 </div>
               </div>
 
@@ -871,49 +914,57 @@ function AdminDashboard() {
               </div>
 
               <div className="flex gap-2 pt-4 border-t">
-                <Button
-                  onClick={() => {
-                    handleApproveDriver(viewDialog.driver!._id);
-                    setViewDialog({ open: false, driver: null });
-                  }}
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                >
-                  Approve
-                </Button>
-                <Button
-                  onClick={() => {
-                    handleRejectDriver(viewDialog.driver!._id, viewDialog.driver!.fullName);
-                    setViewDialog({ open: false, driver: null });
-                  }}
-                  variant="outline"
-                  className="flex-1 text-red-600 hover:bg-red-50"
-                >
-                  Reject
-                </Button>
-                {viewDialog.driver.isBlocked ? (
-                  <Button
-                    onClick={() => {
-                      handleUnblockDriver(viewDialog.driver!._id);
-                      setViewDialog({ open: false, driver: null });
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Unblock
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={() => {
-                      handleBlockDriver(viewDialog.driver!._id);
-                      setViewDialog({ open: false, driver: null });
-                    }}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    Block
-                  </Button>
-                )}
-              </div>
+  {/* 🚨 Approve Button tabhi dikhega jab isApproved false/undefined ho */}
+  {!viewDialog.driver.isApproved && (
+    <Button
+      onClick={() => {
+        handleApproveDriver(viewDialog.driver!._id);
+        // Modal close karne ki zaroorat nahi hai, status automatic badal jayega!
+      }}
+      className="flex-1 bg-green-600 hover:bg-green-700"
+    >
+      Approve
+    </Button>
+  )}
+
+  {/* Reject Button tabhi dikhega jab driver approved NA ho */}
+  {!viewDialog.driver.isApproved && (
+    <Button
+      onClick={() => {
+        handleRejectDriver(viewDialog.driver!._id, viewDialog.driver!.fullName || "This Driver");
+        setViewDialog({ open: false, driver: null });
+      }}
+      variant="outline"
+      className="flex-1 text-red-600 hover:bg-red-50"
+    >
+      Reject
+    </Button>
+  )}
+
+  {viewDialog.driver.isBlocked ? (
+    <Button
+      onClick={() => {
+        handleUnblockDriver(viewDialog.driver!._id);
+        setViewDialog({ open: false, driver: null });
+      }}
+      variant="outline"
+      className="flex-1"
+    >
+      Unblock
+    </Button>
+  ) : (
+    <Button
+      onClick={() => {
+        handleBlockDriver(viewDialog.driver!._id);
+        setViewDialog({ open: false, driver: null });
+      }}
+      variant="destructive"
+      className="flex-1"
+    >
+      Block
+    </Button>
+  )}
+</div>
             </div>
           )}
         </DialogContent>

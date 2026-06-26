@@ -26,34 +26,80 @@ export const Route = createFileRoute("/publish")({
   component: PublishPage,
 });
 
-const schema = z.object({
+const baseSchema = z.object({
   origin: z.string().min(2),
   destination: z.string().min(2),
   date: z.string().min(1),
-  time: z.string().min(1),
+  time: z.string().min(1), 
   arrivalTime: z.string().optional(),
   vehicleSeats: z.string().min(1),
   price: z.string().refine(v => Number(v) > 0),
   description: z.string().optional(),
 });
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<typeof baseSchema>;
+
+// Helper to generate beautifully scannable 12-hour slots with 15-minute intervals
+const generateTimeSlots = () => {
+  const slots = [];
+  const periods = ["AM", "PM"];
+  const minutes = ["00", "15", "30", "45"];
+  
+  for (let p = 0; p < 2; p++) {
+    for (let h = 0; h < 12; h++) {
+      const displayHour = h === 0 ? 12 : h;
+      const backendHour = p === 1 ? (h === 0 ? 12 : h + 12) : (h === 0 ? 0 : h);
+      const strBackendHour = String(backendHour).padStart(2, "0");
+      
+      minutes.forEach(m => {
+        slots.push({
+          label: `${displayHour}:${m} ${periods[p]}`,
+          value: `${strBackendHour}:${m}`
+        });
+      });
+    }
+  }
+  return slots;
+};
 
 function PublishPage() {
   const { t } = useTranslation();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
+  const maxAllowedSeats = user?.vehicleSeats ? Number(user.vehicleSeats) : 5;
+  const timeSlots = generateTimeSlots();
+
+  const strictSchema = baseSchema.superRefine((data, ctx) => {
+    const totalSelected = Number(data.vehicleSeats);
+    if (totalSelected < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vehicleSeats"],
+        message: "Minimum 2 seats are required including the driver.",
+      });
+    }
+    if (totalSelected > maxAllowedSeats) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["vehicleSeats"],
+        message: `Cannot exceed your vehicle total registered limit (${maxAllowedSeats} seats).`,
+      });
+    }
+  });
+
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { vehicleSeats: "5" },
+    resolver: zodResolver(strictSchema),
+    defaultValues: { 
+      vehicleSeats: String(Math.min(maxAllowedSeats, 5)),
+      time: "09:00", 
+    },
   });
 
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
     try {
       const seatCount = Number(values.vehicleSeats);
-      // Determine vehicle type based on seat count
       let vehicleType = "sedan";
       if (seatCount >= 8) {
         vehicleType = "van";
@@ -99,7 +145,6 @@ function PublishPage() {
     );
   }
 
-  // Check if user is a driver and if they are approved
   if (user.role === "driver" && !user.isApproved) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -117,7 +162,6 @@ function PublishPage() {
     );
   }
 
-  // Check if user is a passenger (passengers cannot publish rides)
   if (user.role === "passenger") {
     return (
       <div className="min-h-screen flex flex-col">
@@ -127,12 +171,17 @@ function PublishPage() {
             <Lock className="h-10 w-10 text-primary mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Driver Account Required</h2>
             <p className="text-muted-foreground mb-6">Only drivers can publish rides. Please register as a driver to publish rides.</p>
-            <Link to="/dashboard"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 w-full">Go to Dashboard</Button></Link>
+            <Link to="/dashboard"><Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full font-semibold">Go to Dashboard</Button></Link>
           </div>
         </main>
         <Footer />
       </div>
     );
+  }
+
+  const availableSeatOptions = [];
+  for (let i = 2; i <= maxAllowedSeats; i++) {
+    availableSeatOptions.push(i);
   }
 
   return (
@@ -167,27 +216,47 @@ function PublishPage() {
                 <Input type="date" min={new Date().toISOString().split("T")[0]} {...register("date")} />
                 {errors.date && <p className="text-xs text-destructive">{t("publish.date")}</p>}
               </div>
+
+              {/* AM/PM Selector for Departure Time */}
               <div className="space-y-1.5">
                 <Label>{t("publish.departure")}</Label>
-                <Input type="time" {...register("time")} />
+                <Select defaultValue="09:00" onValueChange={v => setValue("time", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select Departure Time" /></SelectTrigger>
+                  <SelectContent className="max-h-60 overflow-y-auto">
+                    {timeSlots.map(slot => (
+                      <SelectItem key={slot.value} value={slot.value}>{slot.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {errors.time && <p className="text-xs text-destructive">{t("publish.departure")}</p>}
               </div>
+
+              {/* AM/PM Selector for Arrival Time */}
               <div className="space-y-1.5">
                 <Label>{t("publish.arrival")} <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input type="time" {...register("arrivalTime")} />
+                <Select onValueChange={v => setValue("arrivalTime", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select Arrival Time" /></SelectTrigger>
+                  <SelectContent className="max-h-60 overflow-y-auto">
+                    {timeSlots.map(slot => (
+                      <SelectItem key={slot.value} value={slot.value}>{slot.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              
               <div className="space-y-1.5">
-                <Label>Vehicle Seats</Label>
-                <Select defaultValue="5" onValueChange={v => setValue("vehicleSeats", v)}>
+                <Label>Available Seats</Label>
+                <Select defaultValue={String(Math.min(maxAllowedSeats, 5))} onValueChange={v => setValue("vehicleSeats", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                    {availableSeatOptions.map(n => (
                       <SelectItem key={n} value={String(n)}>{n} seats</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.vehicleSeats && <p className="text-xs text-destructive">Vehicle seats are required</p>}
+                {errors.vehicleSeats && <p className="text-xs text-destructive">{errors.vehicleSeats.message}</p>}
               </div>
+
               <div className="space-y-1.5">
                 <Label>{t("publish.price")}</Label>
                 <Input type="number" placeholder={t("publish.price_ph")} min={1} {...register("price")} />

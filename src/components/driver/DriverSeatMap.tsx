@@ -9,6 +9,7 @@ export interface Seat {
   seatNumber: string;
   row: string;
   position: number;
+  type?: string;
   passenger?: {
     _id: string;
     fullName: string;
@@ -30,24 +31,36 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
     if (!acc[seat.row]) {
       acc[seat.row] = [];
     }
-    acc[seat.row].push(seat);
+    if (!acc[seat.row].some(s => s.seatNumber === seat.seatNumber)) {
+      acc[seat.row].push(seat);
+    }
     return acc;
   }, {} as Record<string, Seat[]>);
 
-  const rowOrder = Object.keys(rows).sort();
+  // Row A check and initialization
+  if (!rows["A"]) {
+    rows["A"] = [];
+  }
 
-  const getSeatLabel = (seat: Seat, rowSeats: Seat[]) => {
-    if (seat.position === 1) return "Window";
-    const idx = rowSeats.indexOf(seat);
-    const len = rowSeats.length;
-    if (idx === len - 1) return "Window";
-    return "Middle";
-  };
+  // 🚨 [INDIAN CAR FIX]: Row A me A1 (Driver) ko array ke PEECHE (push) karenge
+  // taaki A2 (Passenger) left me render ho aur A1 (Steering) Right side me aaye!
+  if (!rows["A"].some(s => s.seatNumber === "A1")) {
+    rows["A"].push({
+      _id: "driver-placeholder",
+      seatNumber: "A1",
+      row: "A",
+      position: 2, // Right side position
+      type: "driver",
+      status: "available"
+    });
+  }
+
+  const rowOrder = Object.keys(rows).sort();
 
   return (
     <div className="space-y-4">
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground bg-muted/30 py-2 rounded-xl">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-4 h-5 rounded-t-lg border-2 border-primary bg-primary/20" />
           Booked
@@ -60,18 +73,52 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
           <span className="inline-block w-4 h-5 rounded-t-lg border-2 border-amber-500/40 bg-amber-500/20" />
           Locked
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-4 h-5 rounded-t-lg border-2 border-dashed border-primary/40 bg-primary/5" />
+          Driver (Steering)
+        </span>
       </div>
 
       {/* Seat rows */}
-      <div className="space-y-5">
-        {rowOrder.map((row) => (
-          <div key={row} className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {row} row
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <div className="flex gap-3 flex-wrap justify-center">
-                {rows[row].map((seat) => {
+      <div className="space-y-5 mt-6">
+        {rowOrder.map((row) => {
+          // Row A ke liye hum custom handling karenge taaki sorting isko left me na dhakele
+          let sortedSeats = [...rows[row]];
+          
+          if (row === "A") {
+            // Row A me explicit sorting: Pehle A2 (Passenger), phir A1 (Driver)
+            const pSeat = sortedSeats.find(s => s.seatNumber === "A2");
+            const dSeat = sortedSeats.find(s => s.seatNumber === "A1");
+            sortedSeats = [];
+            if (pSeat) sortedSeats.push(pSeat);
+            if (dSeat) sortedSeats.push(dSeat);
+          } else {
+            // Baki rows ke liye normal left-to-right sorting based on position
+            sortedSeats.sort((a, b) => a.position - b.position);
+          }
+
+          return (
+            <div key={row} className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
+                {row} Row
+              </p>
+              
+              <div className="flex items-center justify-center gap-4">
+                {sortedSeats.map((seat) => {
+                  
+                  // DRIVER SEAT CHECK
+                  if (seat.seatNumber === 'A1' || seat.type === 'driver') {
+                    return (
+                      <div 
+                        key="driver-seat-box"
+                        className="flex flex-col items-center justify-center rounded-t-2xl border-2 border-dashed border-primary/40 bg-primary/5 w-16 h-20 select-none text-center shadow-sm animate-fade-in"
+                      >
+                        <span className="text-[10px] font-bold text-primary/70 uppercase tracking-wider">A1</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold mt-1">Steering</span>
+                      </div>
+                    );
+                  }
+
                   const isBooked = seat.status === 'booked';
                   const isAvailable = seat.status === 'available';
                   const isLocked = seat.status === 'locked';
@@ -94,7 +141,6 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                             isLocked && "bg-amber-500/20 border-amber-500/40 cursor-default opacity-70"
                           )}
                         >
-                          {/* Seat number */}
                           <span
                             className={cn(
                               "text-xs font-semibold leading-none z-10",
@@ -106,7 +152,6 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                             {seat.seatNumber}
                           </span>
 
-                          {/* Passenger avatar */}
                           {passenger && (
                             <Avatar className="h-7 w-7 border border-primary/50">
                               <AvatarImage src={passenger.avatarUrl} />
@@ -116,7 +161,6 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                             </Avatar>
                           )}
 
-                          {/* Seat cushion strip at bottom */}
                           <div
                             className={cn(
                               "w-full h-2.5 rounded-b-sm absolute bottom-0 left-0 right-0",
@@ -126,7 +170,6 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                             )}
                           />
 
-                          {/* Passenger name */}
                           {passenger && (
                             <span className="text-[9px] text-primary font-medium leading-none mt-0.5 truncate max-w-[60px]">
                               {passenger.fullName.split(' ')[0]}
@@ -135,7 +178,6 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                         </button>
                       </DialogTrigger>
 
-                      {/* Passenger details dialog */}
                       {passenger && (
                         <DialogContent className="sm:max-w-sm">
                           <DialogHeader>
@@ -166,15 +208,9 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                   );
                 })}
               </div>
-              {/* Steering wheel placeholder */}
-              {rows[row].some(s => s.position === 1) && (
-                <div className="w-16 h-10 rounded-lg border border-dashed border-muted-foreground/30 flex items-center justify-center text-xs text-muted-foreground/50">
-                  Steering
-                </div>
-              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Summary */}
@@ -182,7 +218,7 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Total passengers</span>
           <span className="font-semibold">
-            {seats.filter(s => s.status === 'booked').length} / {seats.length}
+            {seats.filter(s => s.status === 'booked' && s.seatNumber !== 'A1').length} / {seats.length - (seats.some(s => s.seatNumber === 'A1') ? 1 : 0)}
           </span>
         </div>
       </div>
