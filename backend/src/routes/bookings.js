@@ -140,16 +140,18 @@ router.post(
       ride.seatsAvailable = Math.max(0, ride.seatsAvailable - booking.seats);
       await ride.save();
 
-      // 🚨 [UPDATE]: Confirm hote hi in seats ko permanently BOOKED mark karna
+      // 🚨 [FIXED CODE]: Seats ko permanently BOOKED mark karna
       if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+        // Agar array me numbers aaye hain
         await Seat.updateMany(
           { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
-          { 
-            $set: { 
-              status: "booked", 
-              passenger: userId 
-            } 
-          }
+          { $set: { status: "booked", passenger: userId } }
+        );
+      } else {
+        // Fallback: Agar kisi wajah se array empty hai, toh is ride ki jo bhi seats 'locked' hain, unhe booked kardo
+        await Seat.updateMany(
+          { rideId: booking.rideId, status: "locked" },
+          { $set: { status: "booked", passenger: userId } }
         );
       }
 
@@ -223,7 +225,7 @@ router.patch("/:id/cancel", protect, async (req, res) => {
       ride.seatsAvailable = Math.min(ride.seatsTotal, ride.seatsAvailable + booking.seats);
       await ride.save();
 
-      // 🚨 [UPDATE]: Booking cancel hone par seats ko wapas AVAILABLE mark karna
+      // Booking cancel hone par seats ko wapas AVAILABLE mark karna
       if (booking.seatNumbers && booking.seatNumbers.length > 0) {
         await Seat.updateMany(
           { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },

@@ -90,7 +90,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/rides — create ride (drivers only)
+
 // POST /api/rides — create ride (drivers only)
 router.post(
   "/",
@@ -103,8 +103,8 @@ router.post(
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
-    // [FIX]: Ab express-validator hardcoded checks ke bajay minimum boundary 2 secure rakhega
-    body("seatsTotal").optional().isInt({ min: 2, max: 15 }).withMessage("Total seats must be at least 2"),
+    // [FIX]: Ab express-validator hardcoded checks ke bajay minimum boundary 1 secure rakhega
+    body("seatsTotal").optional().isInt({ min: 1, max: 12 }).withMessage("Total seats must be at least 1"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -135,8 +135,8 @@ router.post(
       const finalSeatsTotal = seatsTotal ? Number(seatsTotal) : getTotalSeats(vehicleType);
 
       // 🚨 [STRICT BUSINESS LOGIC VALIDATION CHECK]: 
-      if (finalSeatsTotal < 2) {
-        return res.status(400).json({ message: "Minimum 2 seats are required including the driver." });
+      if (finalSeatsTotal < 1) {
+        return res.status(400).json({ message: "Minimum 1 seat is required including the driver." });
       }
 
       const maxCarCapacity = driver.vehicleSeats ? Number(driver.vehicleSeats) : 5;
@@ -805,7 +805,7 @@ router.post("/:id/remaining-payment/cash", protect, async (req, res) => {
   }
 });
 
-module.exports = router;
+
 
 // POST /api/rides/:id/deviation-charge — Driver requests extra charge for route deviation
 router.post("/:id/deviation-charge", protect, restrictTo("driver"), async (req, res) => {
@@ -959,3 +959,5 @@ router.post("/:id/deviation-charge/reject", protect, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+module.exports = router;
