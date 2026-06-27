@@ -48,6 +48,7 @@ router.post(
   [
     body("rideId").notEmpty().withMessage("Ride ID is required"),
     body("seats").isInt({ min: 1, max: 15 }).withMessage("Seats must be between 1 and 15"),
+    body("pickupPoint").optional().isString().trim(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -55,7 +56,7 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { rideId, seats } = req.body;
+    const { rideId, seats, seatNumbers, pickupPoint } = req.body;
     const userId = req.user._id;
 
     try {
@@ -78,6 +79,8 @@ router.post(
         rideId,
         passengerId: userId,
         seats: seats,
+        seatNumbers: seatNumbers || [],
+        pickupPoint: pickupPoint || null, 
         status: "pending_payment"
       });
 
@@ -136,6 +139,19 @@ router.post(
       const ride = await Ride.findById(booking.rideId);
       ride.seatsAvailable = Math.max(0, ride.seatsAvailable - booking.seats);
       await ride.save();
+
+      // 🚨 [UPDATE]: Confirm hote hi in seats ko permanently BOOKED mark karna
+      if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+        await Seat.updateMany(
+          { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
+          { 
+            $set: { 
+              status: "booked", 
+              passenger: userId 
+            } 
+          }
+        );
+      }
 
       // Get driver details for email notification
       const driver = await User.findById(ride.driverId);
@@ -206,6 +222,19 @@ router.patch("/:id/cancel", protect, async (req, res) => {
     if (ride) {
       ride.seatsAvailable = Math.min(ride.seatsTotal, ride.seatsAvailable + booking.seats);
       await ride.save();
+
+      // 🚨 [UPDATE]: Booking cancel hone par seats ko wapas AVAILABLE mark karna
+      if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+        await Seat.updateMany(
+          { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
+          { 
+            $set: { 
+              status: "available", 
+              passenger: null 
+            } 
+          }
+        );
+      }
 
       // Emit real-time events
       global.io.to(`user_${req.user._id}`).emit("booking_cancelled", booking);

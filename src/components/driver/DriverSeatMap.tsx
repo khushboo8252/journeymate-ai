@@ -128,7 +128,7 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                     <Dialog key={seat._id || seat.seatNumber}>
                       <DialogTrigger asChild>
                         <button
-                          disabled={!passenger}
+                          disabled={isBooked || isLocked}
                           title={
                             passenger 
                               ? `${passenger.fullName} - ${seat.seatNumber}`
@@ -136,7 +136,7 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                           }
                           className={cn(
                             "group relative flex flex-col items-center justify-between pb-1.5 pt-2.5 rounded-t-2xl border-2 w-16 h-20 transition-all duration-150 select-none",
-                            isBooked && "bg-primary/20 border-primary cursor-pointer hover:bg-primary/30",
+                            isBooked && "bg-muted border-muted-foreground/30 cursor-not-allowed opacity-50 grayscale",
                             isAvailable && "bg-muted/50 border-muted-foreground/20 cursor-default opacity-60",
                             isLocked && "bg-amber-500/20 border-amber-500/40 cursor-default opacity-70"
                           )}
@@ -144,7 +144,7 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                           <span
                             className={cn(
                               "text-xs font-semibold leading-none z-10",
-                              isBooked && "text-primary",
+                              isBooked && "text-muted-foreground",
                               isAvailable && "text-muted-foreground/40",
                               isLocked && "text-amber-600"
                             )}
@@ -164,14 +164,14 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
                           <div
                             className={cn(
                               "w-full h-2.5 rounded-b-sm absolute bottom-0 left-0 right-0",
-                              isBooked && "bg-primary/10",
+                              isBooked && "bg-muted-foreground/10",
                               isAvailable && "bg-muted-foreground/10",
                               isLocked && "bg-amber-500/10"
                             )}
                           />
 
                           {passenger && (
-                            <span className="text-[9px] text-primary font-medium leading-none mt-0.5 truncate max-w-[60px]">
+                            <span className="text-[9px] text-muted-foreground font-medium leading-none mt-0.5 truncate max-w-[60px]">
                               {passenger.fullName.split(' ')[0]}
                             </span>
                           )}

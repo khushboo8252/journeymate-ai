@@ -54,12 +54,11 @@ router.get("/users", adminAuth, async (req, res) => {
 });
 
 // GET /api/admin/drivers — get all drivers with detailed info
-// GET /api/admin/drivers — get all drivers with detailed info
 router.get("/drivers", adminAuth, async (req, res) => {
   try {
-    // [FIX] Bina kisi '+' ke saari fields ko clearly select kar rhe hain taaki Mongoose sab fetch kare
+    // 🚨 [FIX]: Yahan par insuranceCertificate aur pollutionCertificate add kar diye hain
     const drivers = await User.find({ role: "driver" })
-      .select("fullName email phone role avatarUrl vehicleSeats vehicleNumber isProfileComplete bankAccountNumber ifscCode earnings isBlocked isApproved createdAt drivingLicense aadharCard panCard rc vehicleImage")
+      .select("fullName email phone role avatarUrl vehicleSeats vehicleNumber isProfileComplete bankAccountNumber ifscCode earnings isBlocked isApproved createdAt drivingLicense aadharCard panCard rc vehicleImage insuranceCertificate pollutionCertificate")
       .sort({ createdAt: -1 });
 
     // Get detailed stats for each driver
@@ -97,6 +96,7 @@ router.get("/drivers", adminAuth, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 // POST /api/admin/drivers/:id/release-payment — release payment to driver
 router.post("/drivers/:id/release-payment", adminAuth, async (req, res) => {
   try {

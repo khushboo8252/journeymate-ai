@@ -18,6 +18,7 @@ interface RideCardProps {
     avatarUrl?: string | null;
   } | null;
   index?: number;
+  pickupPoint?: string; // ✅ NAYA PROP ADD KIYA: Pickup Point aage bhejne ke liye
 }
 
 function formatDuration(minutes: number) {
@@ -34,7 +35,7 @@ function calculateFinalPrice(basePrice: number): number {
   return basePrice + platformFee;
 }
 
-export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {
+export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0, pickupPoint }: RideCardProps) {
   const navigate = useNavigate();
   const departure = new Date(departureAt);
   const arrival = arrivalAt ? new Date(arrivalAt) : null;
@@ -45,7 +46,12 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
     : "?";
 
   const handleCardClick = () => {
-    navigate({ to: "/rides/$rideId", params: { rideId: id } });
+    // ✅ FIX: URL mein pickup point pass kar rahe hain
+    navigate({ 
+      to: "/rides/$rideId", 
+      params: { rideId: id },
+      search: pickupPoint ? { pickup: pickupPoint } : undefined as any 
+    });
   };
 
   return (
@@ -120,7 +126,12 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
               className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20 whitespace-nowrap shrink-0"
               onClick={e => {
                 e.stopPropagation();
-                navigate({ to: "/rides/$rideId", params: { rideId: id } });
+                // ✅ FIX: Button click par bhi pass kar rahe hain
+                navigate({ 
+                  to: "/rides/$rideId", 
+                  params: { rideId: id },
+                  search: pickupPoint ? { pickup: pickupPoint } : undefined as any 
+                });
               }}
             >
               View ride

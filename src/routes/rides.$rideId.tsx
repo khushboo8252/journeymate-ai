@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiUser } from "@/lib/api";
@@ -60,6 +62,10 @@ function RideDetailPage() {
   const [alreadyBooked, setAlreadyBooked] = useState(false);
   const [seatsToBook, setSeatsToBook] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("online");
+
+  // 🚨 [NEW FEATURE]: Pickup Point State
+  const searchParams = Route.useSearch() as any;
+const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
 
   // Interactive Passenger Seat Selection States
   const [seatsList, setSeatsList] = useState<any[]>([]);
@@ -192,7 +198,6 @@ function RideDetailPage() {
     try {
       setLoadingSeats(true);
       const res = await api.get<any>(`/api/rides/${rideId}/seats`);
-      // Ensure backend array doesn't bundle any hardcoded placeholder items
       const rawSeats = Array.isArray(res) ? res : res.seats || [];
       setSeatsList(rawSeats.filter((s: any) => s.seatNumber !== "A1")); 
     } catch (err) {
@@ -217,7 +222,7 @@ function RideDetailPage() {
   };
 
   const toggleSeatSelection = (seatNumber: string) => {
-    if (seatNumber === "A1") return; // Safety check: Driver seat block click trigger drop
+    if (seatNumber === "A1") return; 
 
     let updatedSeats: string[];
     if (selectedSeats.includes(seatNumber)) {
@@ -238,12 +243,18 @@ function RideDetailPage() {
     try {
       await api.post(`/api/rides/${ride._id}/seats/lock`, { seatNumbers: selectedSeats });
 
+      // 🚨 [UPDATE]: Added pickupPoint to the payload
       const bookingResponse = await api.post<{
         booking: { _id: string };
         paymentOrder?: { keyId: string; amount: number; currency: string; orderId: string };
         requiresPayment: boolean;
         upfrontAmount?: number;
-      }>("/api/bookings", { rideId: ride._id, seats: selectedSeats.length, seatNumbers: selectedSeats });
+      }>("/api/bookings", { 
+        rideId: ride._id, 
+        seats: selectedSeats.length, 
+        seatNumbers: selectedSeats,
+        pickupPoint: pickupPoint.trim() || undefined // Added pickup point here
+      });
 
       if (bookingResponse.requiresPayment && bookingResponse.paymentOrder) {
         const paymentOrder = bookingResponse.paymentOrder;
@@ -275,6 +286,7 @@ function RideDetailPage() {
                 toast.success(`Seats ${selectedSeats.join(", ")} booked successfully!`);
                 setAlreadyBooked(true);
                 setSelectedSeats([]);
+                setPickupPoint(""); // Reset input
                 fetchRide();
                 fetchPassengerSeats();
               } catch (error) {
@@ -314,6 +326,7 @@ function RideDetailPage() {
         toast.success(`Seats ${selectedSeats.join(", ")} booked! Have a great journey.`);
         setAlreadyBooked(true);
         setSelectedSeats([]);
+        setPickupPoint(""); // Reset input
         fetchRide();
         fetchPassengerSeats();
         setBooking(false);
@@ -367,14 +380,12 @@ function RideDetailPage() {
     return h === 0 ? `${min}min` : min === 0 ? `${h}hr` : `${h}hr ${min}min`;
   };
 
-  // Passenger seat array grouping logic
   const seatRows = seatsList.reduce((acc, seat) => {
     if (!acc[seat.row]) acc[seat.row] = [];
     if (!acc[seat.row].some((s: any) => s.seatNumber === seat.seatNumber)) acc[seat.row].push(seat);
     return acc;
   }, {} as Record<string, any[]>);
 
-  // [FIX] Row A setup logic: explicit placeholder separation to ensure clean UI but zero numeric count interference
   if (!seatRows["A"]) seatRows["A"] = [];
   
   const sortedRowKeys = Object.keys(seatRows).sort();
@@ -442,7 +453,7 @@ function RideDetailPage() {
                           <span className="font-semibold text-base sm:text-lg">{ride.origin}</span>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                             <MapPin className="h-3 w-3" />
-                            Pickup point
+                            Origin City
                           </div>
                         </div>
                       </div>
@@ -465,7 +476,7 @@ function RideDetailPage() {
                           <span className="font-semibold text-base sm:text-lg">{ride.destination}</span>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                             <MapPin className="h-3 w-3" />
-                            Drop-off point
+                            Drop-off City
                           </div>
                         </div>
                       </div>
@@ -699,12 +710,9 @@ function RideDetailPage() {
                               {sortedRowKeys.map((rowKey) => {
                                 let seatsInRow = [...seatRows[rowKey]];
                                 
-                                // Indian Right-Hand Drive Configuration Rendering
                                 if (rowKey === "A") {
-                                  // Manual placement box injection just for visual mapping (it's not part of state count array)
                                   return (
                                     <div key={rowKey} className="flex items-center gap-2 justify-center w-full">
-                                      {/* Passenger Front Seat (Left side in Indian cars) */}
                                       {seatsInRow.find(s => s.seatNumber === "A2") ? (
                                         (() => {
                                           const seat = seatsInRow.find(s => s.seatNumber === "A2");
@@ -732,7 +740,6 @@ function RideDetailPage() {
                                         })()
                                       ) : null}
 
-                                      {/* Driver Steering Box on Right Side (Purely static - completely isolated from selection count logic) */}
                                       <div 
                                         key="driver-steering-box" 
                                         className="w-11 h-12 rounded-t-lg bg-primary/5 border border-dashed border-primary/30 flex flex-col items-center justify-center text-primary/60 select-none shadow-sm"
@@ -744,7 +751,6 @@ function RideDetailPage() {
                                   );
                                 }
 
-                                // Render for standard passenger rows (Row B, C etc.)
                                 seatsInRow.sort((a, b) => a.position - b.position);
 
                                 return (
@@ -789,7 +795,20 @@ function RideDetailPage() {
                           <span>Count: <strong className="text-foreground">{selectedSeats.length}</strong></span>
                         </div>
 
-                        {/* [PURANI ORIGINAL CALCULATION TEMPLATE] */}
+                        {/* 🚨 [NEW FEATURE UI]: Optional Exact Pickup Point */}
+                        <div className="space-y-1.5 py-2 border-t border-border/30">
+                          <Label className="text-xs text-muted-foreground">Exact Pickup Point (Optional)</Label>
+                          <div className="relative">
+                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="e.g. City Mall, Gate 2"
+                              value={pickupPoint}
+                              onChange={(e) => setPickupPoint(e.target.value)}
+                              className="pl-9 h-10 text-sm"
+                            />
+                          </div>
+                        </div>
+
                         <Button
                           onClick={bookRide}
                           disabled={booking || selectedSeats.length === 0}

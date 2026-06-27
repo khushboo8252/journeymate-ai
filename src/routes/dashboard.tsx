@@ -67,6 +67,7 @@ type BookingWithRide = ApiBooking & {
 type DriverBooking = ApiBooking & {
   passengerId: ApiUser | null;
   rideId: Pick<ApiRide, "_id" | "origin" | "destination" | "departureAt" | "pricePerSeat" | "seatsTotal"> | null;
+  pickupPoint?: string | null; // ✅ Added Pickup Point Type
 };
 
 function DashboardPage() {
@@ -260,26 +261,23 @@ function DashboardPage() {
     try {
       setLoadingSeats(true);
       const response = await api.get<{ seats: DriverSeat[] }>(`/api/rides/${rideId}/seats/passengers`);
-      // Agar backend se wrap hokar aa rha hai toh safely save karein
       setSeatsForMap(Array.isArray(response) ? response : response.seats || []);
     } catch (err) {
       console.error("Failed to fetch seats:", err);
       toast.error("Failed to load seat map");
-      setSeatsForMap([]); // Error state me safe fall back
+      setSeatsForMap([]); 
     } finally {
       setLoadingSeats(false);
     }
   };
 
   const openSeatMap = (ride: ApiRide) => {
-    // 1. Naya modal kholne se pehle state bilkul clean karein taaki purani ride ka data na dikhe
     setSeatsForMap([]); 
     setSelectedRideForSeatMap(ride);
     fetchSeatsForRide(ride._id);
   };
 
   const closeSeatMap = () => {
-    // 2. Modal close hote hi states ko reset karein
     setSelectedRideForSeatMap(null);
     setSeatsForMap([]);
   };
@@ -307,6 +305,18 @@ function DashboardPage() {
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to cancel");
+    }
+  };
+
+  const cancelDriverBookingByDriver = async (bookingId: string) => {
+    const confirmed = window.confirm("Are you sure you want to cancel this passenger's booking?");
+    if (!confirmed) return;
+    try {
+      await api.patch(`/api/bookings/${bookingId}/cancel`);
+      toast.success("Passenger booking cancelled.");
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel booking");
     }
   };
 
@@ -348,7 +358,7 @@ function DashboardPage() {
       const qs = new URLSearchParams();
       if (searchFrom.trim()) qs.set("from", searchFrom.trim());
       if (searchTo.trim()) qs.set("to", searchTo.trim());
-      if (searchPickup.trim()) qs.set("pickup", searchPickup.trim());
+      // Explicitly not sending pickup point to backend for search filter
       if (searchDate && searchDate.trim()) {
         qs.set("date", searchDate);
       }
@@ -616,6 +626,7 @@ function DashboardPage() {
                           arrivalAt={ride.arrivalAt}
                           seatsAvailable={ride.seatsAvailable}
                           pricePerSeat={ride.pricePerSeat}
+                          pickupPoint={searchPickup}
                           driver={typeof ride.driverId === "object" ? ride.driverId : null}
                           index={i}
                         />
@@ -694,7 +705,7 @@ function DashboardPage() {
               ))}
             </TabsContent>
 
-            {/* PASSENGERS */}
+            {/* 🚨 PASSENGERS SECTION WITH INTERACTIVE CLICK DIALOG 🚨 */}
             {isDriver && (
               <TabsContent value="passengers" className="space-y-4">
                 <p className="text-sm text-muted-foreground">{t("dashboard.passengers")}</p>
@@ -708,48 +719,102 @@ function DashboardPage() {
                   const passenger = booking.passengerId;
                   const ride = typeof booking.rideId === "object" ? booking.rideId : null;
                   return (
-                    <div key={booking._id} className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 border border-border/40">
-                          <AvatarImage src={(passenger as any)?.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-sm bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
-                            {passenger?.fullName ? passenger.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-sm">{passenger?.fullName ?? "Unknown"}</p>
-                          {(passenger as any)?.phone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3" />{(passenger as any).phone}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        {ride && (
-                          <div className="flex items-center gap-1.5 text-sm font-medium">
-                            <MapPin className="h-3.5 w-3.5 text-primary" />{ride.origin}
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                    <Dialog key={booking._id}>
+                      <DialogTrigger asChild>
+                        <div className="glass rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition-all duration-200">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10 border border-border/40">
+                              <AvatarImage src={(passenger as any)?.avatarUrl ?? undefined} />
+                              <AvatarFallback className="text-sm bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-bold">
+                                {passenger?.fullName ? passenger.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-sm">{passenger?.fullName ?? "Unknown"}</p>
+                              {(passenger as any)?.phone && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />{(passenger as any).phone}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        )}
-                        <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-                          {ride && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}
-                            </span>
-                          )}
-                          <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""}</span>
-                          {ride && (
-                            <span className="flex items-center gap-1">
-                              <IndianRupee className="h-3 w-3" />{ride.pricePerSeat * booking.seats} total
-                            </span>
+                          <div className="flex-1">
+                            {ride && (
+                              <div className="flex items-center gap-1.5 text-sm font-medium">
+                                <MapPin className="h-3.5 w-3.5 text-primary" />{ride.origin}
+                                <ArrowRight className="h-3 w-3 text-muted-foreground" />{ride.destination}
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                              {ride && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />{format(new Date(ride.departureAt), "EEE d MMM, h:mm a")}
+                                </span>
+                              )}
+                              <span>{booking.seats} seat{booking.seats > 1 ? "s" : ""}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Badge variant={booking.status === "confirmed" ? "default" : "secondary"} className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
+                              {booking.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      </DialogTrigger>
+
+                      <DialogContent className="sm:max-w-sm">
+                        <DialogHeader>
+                          <DialogTitle>Passenger &amp; Booking Details</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex flex-col items-center space-y-4 py-4">
+                          <Avatar className="h-20 w-20 border-2 border-primary">
+                            <AvatarImage src={(passenger as any)?.avatarUrl ?? undefined} />
+                            <AvatarFallback className="text-2xl bg-primary/20 text-primary font-bold">
+                              {passenger?.fullName ? passenger.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="text-center">
+                            <h3 className="font-semibold text-lg">{passenger?.fullName ?? "Passenger"}</h3>
+                            <p className="text-xs text-muted-foreground">{passenger?.email ?? ""}</p>
+                          </div>
+
+                          <div className="w-full space-y-2.5 bg-muted/40 p-3 rounded-xl border text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Route:</span>
+                              <span className="font-medium text-right">{ride?.origin} → {ride?.destination}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Seats Booked:</span>
+                              <span className="font-semibold text-primary">{booking.seats} Seat{booking.seats > 1 ? 's' : ''} ({booking.seatNumbers?.join(", ") || "—"})</span>
+                            </div>
+                            
+                            <div className="flex flex-col gap-1 pt-1 border-t border-border/40">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <MapPin className="h-3 w-3 text-primary" /> Exact Pickup Point:
+                              </span>
+                              <p className={
+                                `text-xs font-medium p-2 rounded-lg mt-0.5 ${
+                                  booking.pickupPoint 
+                                    ? "bg-primary/10 text-primary border border-primary/20" 
+                                    : "bg-muted text-muted-foreground/60 italic"
+                                }`
+                              }>
+                                {booking.pickupPoint || "No specific pickup point provided by passenger."}
+                              </p>
+                            </div>
+                          </div>
+
+                          {passenger?.phone && (
+                            <Button
+                              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold"
+                              onClick={() => window.location.href = `tel:${passenger.phone}`}
+                            >
+                              <Phone className="h-4 w-4 mr-2" /> Call Passenger
+                            </Button>
                           )}
                         </div>
-                      </div>
-                      <Badge variant={booking.status === "confirmed" ? "default" : "secondary"} className={booking.status === "confirmed" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}>
-                        {booking.status}
-                      </Badge>
-                    </div>
+                      </DialogContent>
+                    </Dialog>
                   );
                 })}
               </TabsContent>

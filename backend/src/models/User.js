@@ -101,6 +101,15 @@ const userSchema = new mongoose.Schema(
       url: { type: String, default: null },
       publicId: { type: String, default: null },
     },
+    // ✅ Naye Certificates yahan add kiye hain
+    insuranceCertificate: {
+      url: { type: String, default: null },
+      publicId: { type: String, default: null },
+    },
+    pollutionCertificate: {
+      url: { type: String, default: null },
+      publicId: { type: String, default: null },
+    },
     bankAccountNumber: {
       type: String,
       default: null,
