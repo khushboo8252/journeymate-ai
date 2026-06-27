@@ -47,7 +47,7 @@ router.post(
   protect,
   [
     body("rideId").notEmpty().withMessage("Ride ID is required"),
-    body("seats").isInt({ min: 1, max: 15 }).withMessage("Seats must be between 1 and 15"),
+    body("seats").isInt({ min: 1, max: 12 }).withMessage("Seats must be between 1 and 12"),
     body("pickupPoint").optional().isString().trim(),
   ],
   async (req, res) => {
