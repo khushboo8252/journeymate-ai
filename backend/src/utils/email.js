@@ -122,7 +122,8 @@ const sendBookingNotificationEmail = async (driverEmail, driverName, passengerNa
             <h3 style="color: #333; margin-top: 0;">Payment Information</h3>
             <p><strong>Base Fare:</strong> ₹${baseTotal}</p>
             <p><strong>Platform Fee + GST (5%):</strong> ₹${platformFee}</p>
-            <p style="font-size: 16px; font-weight: bold; color: #f59e0b; margin-top: 10px;"><strong>Remaining Payment:</strong> ₹${remainingAmount}</p>
+            <p style="font-size: 16px; font-weight: bold; color: #22c55e; margin-top: 10px;"><strong>Upfront Payment Received:</strong> ₹${upfrontAmount}</p>
+            <p style="font-size: 16px; font-weight: bold; color: #f59e0b; margin-top: 5px;"><strong>Remaining Payment:</strong> ₹${remainingAmount}</p>
           </div>
           
           <p>Please contact the passenger to confirm pickup details. The passenger has paid the upfront amount.</p>
