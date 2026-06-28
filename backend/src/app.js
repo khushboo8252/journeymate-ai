@@ -74,7 +74,7 @@ app.use((err, _req, res, _next) => {
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;
-
+console.log(process.env.MONGODB_URI)
 mongoose
   .connect(MONGODB_URI)
   .then(async () => {
