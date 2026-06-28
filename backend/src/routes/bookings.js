@@ -6,7 +6,7 @@ const Seat = require("../models/Seat");
 const User = require("../models/User");
 const { protect, restrictTo } = require("../middleware/auth");
 const { createUpfrontPaymentOrder, processUpfrontPayment } = require("../services/paymentService");
-const { sendBookingNotificationEmail } = require("../utils/email");
+const { sendBookingNotificationEmail, sendPassengerBookingConfirmationEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -179,6 +179,21 @@ router.post(
           booking.seats,
           baseTotal,
           platformFee,
+          upfrontAmount,
+          remainingAmount
+        );
+
+        // Send booking confirmation email to passenger
+        sendPassengerBookingConfirmationEmail(
+          passenger.email,
+          passenger.fullName,
+          driver.fullName,
+          driver.phone,
+          ride.origin,
+          ride.destination,
+          ride.departureAt,
+          booking.seats,
+          totalWithFee,
           upfrontAmount,
           remainingAmount
         );

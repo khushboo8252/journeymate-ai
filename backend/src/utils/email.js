@@ -142,8 +142,59 @@ const sendBookingNotificationEmail = async (driverEmail, driverName, passengerNa
   }
 };
 
+const sendPassengerBookingConfirmationEmail = async (passengerEmail, passengerName, driverName, driverPhone, rideOrigin, rideDestination, rideDate, seatsBooked, totalAmount, upfrontAmount, remainingAmount) => {
+  try {
+    const mailOptions = {
+      from: process.env.SMTP_USER,
+      to: passengerEmail,
+      subject: "Booking Confirmation - Ukyro",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #22c55e;">Booking Confirmed!</h2>
+          <p>Dear ${passengerName},</p>
+          <p>Your ride has been successfully booked. Here are the details:</p>
+          
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">Ride Information</h3>
+            <p><strong>From:</strong> ${rideOrigin}</p>
+            <p><strong>To:</strong> ${rideDestination}</p>
+            <p><strong>Date:</strong> ${new Date(rideDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p><strong>Time:</strong> ${new Date(rideDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
+            <p><strong>Seats Booked:</strong> ${seatsBooked}</p>
+          </div>
+
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">Driver Information</h3>
+            <p><strong>Driver Name:</strong> ${driverName}</p>
+            <p><strong>Driver Phone:</strong> ${driverPhone}</p>
+          </div>
+
+          <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">Payment Information</h3>
+            <p><strong>Total Amount:</strong> ₹${totalAmount}</p>
+            <p style="font-size: 16px; font-weight: bold; color: #22c55e; margin-top: 10px;"><strong>Upfront Payment Made:</strong> ₹${upfrontAmount} ✓</p>
+            <p style="font-size: 16px; font-weight: bold; color: #f59e0b; margin-top: 5px;"><strong>Remaining Payment Due:</strong> ₹${remainingAmount} (pay before ride)</p>
+          </div>
+          
+          <p>Please contact the driver to confirm pickup details. The remaining payment will be collected before the ride.</p>
+          
+          <p style="margin-top: 30px; color: #666; font-size: 12px;">
+            This is an automated email from Ukyro. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Booking confirmation email sent to ${passengerEmail}`);
+  } catch (error) {
+    console.error("Error sending passenger booking confirmation email:", error);
+  }
+};
+
 module.exports = {
   sendDriverApprovalRequestEmail,
   sendDriverApprovalEmail,
   sendBookingNotificationEmail,
+  sendPassengerBookingConfirmationEmail,
 };
