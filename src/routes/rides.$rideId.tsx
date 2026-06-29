@@ -65,7 +65,7 @@ function RideDetailPage() {
 
   // 🚨 [NEW FEATURE]: Pickup Point State
   const searchParams = Route.useSearch() as any;
-const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
+  const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
 
   // Interactive Passenger Seat Selection States
   const [seatsList, setSeatsList] = useState<any[]>([]);
@@ -809,6 +809,18 @@ const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
                           </div>
                         </div>
 
+                        {/* 🚨 [MODIFIED]: Added breakdown text above button */}
+                        {selectedSeats.length > 0 && (
+                          <div className="text-center bg-muted/20 border border-border/50 rounded-lg p-2 mb-2">
+                            <p className="text-xs text-muted-foreground">
+                              Online advance fee: <span className="font-semibold text-foreground">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)}</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              (Remaining <span className="font-semibold text-primary">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</span> to be paid to driver during the ride)
+                            </p>
+                          </div>
+                        )}
+
                         <Button
                           onClick={bookRide}
                           disabled={booking || selectedSeats.length === 0}
@@ -845,80 +857,39 @@ const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
                           <p className="text-sm text-muted-foreground">{t("ride_details.confirm_completion")}</p>
                         )}
                       </div>
+                      
+                      {/* 🚨 [MODIFIED]: Single button to "Pay Driver" */}
                       {!ride.confirmByPassenger && (
                         <div className="space-y-3">
                           <div className="bg-primary/10 rounded-lg p-3 text-center">
                             <p className="text-sm text-muted-foreground">Pay to driver</p>
                             <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</p>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => setPaymentMethod("online")}
-                              variant={paymentMethod === "online" ? "default" : "outline"}
-                              className="flex-1"
-                            >
-                              <IndianRupee className="h-4 w-4 mr-2" />Online
-                            </Button>
-                            <Button
-                              onClick={() => setPaymentMethod("cash")}
-                              variant={paymentMethod === "cash" ? "default" : "outline"}
-                              className="flex-1"
-                            >
-                              Cash
-                            </Button>
-                          </div>
+                          
                           <Button
                             onClick={async () => {
                               try {
                                 await api.patch(`/api/rides/${rideId}/confirm/passenger`);
-                                if (paymentMethod === "online") {
-                                  const paymentResponse = await api.post<{
-                                    orderId: string;
-                                    amount: number;
-                                    currency: string;
-                                    keyId: string;
-                                  }>(`/api/rides/${rideId}/remaining-payment`, {});
-                                  
-                                  const options = {
-                                    key: paymentResponse.keyId,
-                                    amount: paymentResponse.amount,
-                                    currency: paymentResponse.currency,
-                                    name: "Ukyro",
-                                    description: "Remaining payment for ride",
-                                    order_id: paymentResponse.orderId,
-                                    handler: async function (response: any) {
-                                      try {
-                                        await api.post(`/api/rides/${rideId}/remaining-payment/verify`, {
-                                          paymentId: response.razorpay_payment_id,
-                                          signature: response.razorpay_signature,
-                                        });
-                                        toast.success(t("ride_details.ride_completed"));
-                                        fetchRide();
-                                      } catch (err) {
-                                        toast.error("Payment verification failed");
-                                      }
-                                    },
-                                    modal: {
-                                      ondismiss: function() {
-                                        toast.error("Payment cancelled");
-                                        fetchRide();
-                                      },
-                                    },
-                                  };
-                                  const rzp = new (window as any).Razorpay(options);
-                                  rzp.open();
-                                } else {
-                                  await api.post(`/api/rides/${rideId}/remaining-payment/cash`, {});
-                                  toast.success(t("ride_details.ride_completed"));
-                                  fetchRide();
-                                }
+                                
+                                // Send socket notification to driver
+                                const driverUserId = typeof ride?.driverId === "object" ? ride?.driverId?._id : ride?.driverId;
+                                const socket = getSocket();
+                                socket.emit('passenger_paid_driver', { 
+                                  rideId: rideId, 
+                                  driverId: driverUserId, 
+                                  amount: Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)), 
+                                  passengerName: user?.fullName 
+                                });
+
+                                toast.success("Payment notification sent to driver.");
+                                fetchRide();
                               } catch (err) {
-                                toast.error("Failed to confirm");
+                                toast.error("Failed to notify driver.");
                               }
                             }}
                             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
                           >
-                            {t("ride_details.confirm_button")}
+                            I have paid the driver
                           </Button>
                         </div>
                       )}

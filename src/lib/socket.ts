@@ -37,3 +37,8 @@ export const disconnectSocket = () => {
     socket = null;
   }
 };
+// in src/lib/socket.ts
+export const notifyDriverPayment = (rideId: string, driverId: string, amount: number, passengerName: string) => {
+    const socket = getSocket();
+    socket.emit('passenger_paid_driver', { rideId, driverId, amount, passengerName });
+};

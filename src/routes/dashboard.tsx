@@ -28,6 +28,7 @@ import {
   Users,
   X,
   Wind,
+  Banknote
 } from "lucide-react";
 import { RideCard } from "@/components/site/RideCard";
 import { LocationTracker } from "@/components/driver/LocationTracker";
@@ -42,11 +43,12 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Autocomplete } from "@/components/ui/autocomplete";
+import { LocationAutocomplete, type LocationData } from "@/components/ui/LocationAutocomplete";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiBooking, ApiUser } from "@/lib/api";
 import { DriverSeatMap, type Seat as DriverSeat } from "@/components/driver/DriverSeatMap";
+import { PickupNavigator } from "@/components/driver/PickupNavigator";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -67,7 +69,10 @@ type BookingWithRide = ApiBooking & {
 type DriverBooking = ApiBooking & {
   passengerId: ApiUser | null;
   rideId: Pick<ApiRide, "_id" | "origin" | "destination" | "departureAt" | "pricePerSeat" | "seatsTotal"> | null;
-  pickupPoint?: string | null; // ✅ Added Pickup Point Type
+  pickupPoint?: string | null;
+  deviationCharge?: number; 
+  driverCashFare?: number;
+  isPaymentConfirmedByDriver?: boolean; // Payment status check
 };
 
 function DashboardPage() {
@@ -83,10 +88,10 @@ function DashboardPage() {
   const [loadingSeats, setLoadingSeats] = useState(false);
   const isDriver = user?.role === "driver";
 
-  // Search functionality for passengers
-  const [searchFrom, setSearchFrom] = useState("");
-  const [searchTo, setSearchTo] = useState("");
-  const [searchPickup, setSearchPickup] = useState("");
+  const [searchFrom, setSearchFrom] = useState<LocationData | null>(null);
+  const [searchTo, setSearchTo] = useState<LocationData | null>(null);
+  const [searchPickup, setSearchPickup] = useState<LocationData | null>(null);
+  
   const [searchDate, setSearchDate] = useState("");
   const [searchRides, setSearchRides] = useState<ApiRide[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -96,7 +101,6 @@ function DashboardPage() {
     if (!user) return;
     fetchData();
 
-    // Connect to WebSocket
     const socket = getSocket();
     if (isDriver) {
       joinDriverRoom(user._id);
@@ -104,7 +108,6 @@ function DashboardPage() {
       joinUserRoom(user._id);
     }
 
-    // Fetch latest user data to check approval status
     const checkApprovalStatus = async () => {
       try {
         const userData = await api.get<{ user: ApiUser }>("/api/profile");
@@ -129,7 +132,6 @@ function DashboardPage() {
       checkApprovalStatus();
     }
 
-    // Listen for real-time events
     socket.on("driver_approved", (driver) => {
       if (driver._id === user._id) {
         setShowApprovalPopup(true);
@@ -146,6 +148,15 @@ function DashboardPage() {
     socket.on("booking_created", (booking) => {
       if (isDriver) {
         toast.success(`New booking received! ${booking.passengerId?.fullName} booked ${booking.seats} seat(s)`);
+        fetchData();
+      }
+    });
+
+    socket.on("passenger_paid_driver", (data: any) => {
+      if (isDriver) {
+        toast.success(`💰 Payment Alert: ${data.passengerName} has paid you ₹${data.amount}. Please confirm in passenger details!`, {
+          duration: 10000,
+        });
         fetchData();
       }
     });
@@ -216,6 +227,7 @@ function DashboardPage() {
       socket.off("driver_approved");
       socket.off("driver_rejected");
       socket.off("booking_created");
+      socket.off("passenger_paid_driver");
       socket.off("booking_cancelled");
       socket.off("ride_cancelled");
       socket.off("driver_confirmed_completion");
@@ -227,6 +239,23 @@ function DashboardPage() {
       socket.off("driver_blocked");
     };
   }, [user]);
+
+  useEffect(() => {
+    const initAudio = () => {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+    };
+
+    document.addEventListener('click', initAudio, { once: true });
+    document.addEventListener('keydown', initAudio, { once: true });
+
+    return () => {
+      document.removeEventListener('click', initAudio);
+      document.removeEventListener('keydown', initAudio);
+    };
+  }, []);
 
   const fetchData = async () => {
     if (!user) return;
@@ -320,6 +349,7 @@ function DashboardPage() {
     }
   };
 
+  // ✅ RIDE COMPLETE FUNCTION
   const confirmRide = async (rideId: string) => {
     try {
       const response = await api.patch<{
@@ -340,6 +370,18 @@ function DashboardPage() {
     }
   };
 
+  // 🚨 NAYA: SIRF PASSENGER PAYMENT CONFIRM FUNCTION 🚨
+  const confirmPassengerPayment = async (bookingId: string, passengerName: string) => {
+    try {
+      // Backend ko API call karo jo us specific booking ki payment receive mark karegi
+      await api.patch(`/api/bookings/${bookingId}/confirm-payment`);
+      toast.success(`Payment confirmed for ${passengerName}`);
+      fetchData(); // UI update karne ke liye refetch
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to confirm payment");
+    }
+  };
+
   const handlePopupClick = async () => {
     await api.post("/api/profile/notification-seen", {});
     setShowApprovalPopup(false);
@@ -356,9 +398,9 @@ function DashboardPage() {
     setSearched(true);
     try {
       const qs = new URLSearchParams();
-      if (searchFrom.trim()) qs.set("from", searchFrom.trim());
-      if (searchTo.trim()) qs.set("to", searchTo.trim());
-      // Explicitly not sending pickup point to backend for search filter
+      if (searchFrom?.display_name) qs.set("from", searchFrom.display_name.trim());
+      if (searchTo?.display_name) qs.set("to", searchTo.display_name.trim());
+      
       if (searchDate && searchDate.trim()) {
         qs.set("date", searchDate);
       }
@@ -553,21 +595,36 @@ function DashboardPage() {
                         <MapPin className="h-3 w-3" />
                         {t("search.from")}
                       </label>
-                      <Autocomplete value={searchFrom} onChange={setSearchFrom} placeholder={t("search.from_ph")} className="w-full" />
+                      <LocationAutocomplete 
+                        value={searchFrom?.display_name || ""} 
+                        onLocationSelect={(loc) => setSearchFrom(loc)} 
+                        placeholder={t("search.from_ph")} 
+                        className="w-full" 
+                      />
                     </div>
                     <div>
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
                         <MapPin className="h-3 w-3" />
                         {t("search.to")}
                       </label>
-                      <Autocomplete value={searchTo} onChange={setSearchTo} placeholder={t("search.to_ph")} className="w-full" />
+                      <LocationAutocomplete 
+                        value={searchTo?.display_name || ""} 
+                        onLocationSelect={(loc) => setSearchTo(loc)} 
+                        placeholder={t("search.to_ph")} 
+                        className="w-full" 
+                      />
                     </div>
                     <div>
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5 mb-1">
                         <MapPin className="h-3 w-3" />
                         Pickup Point
                       </label>
-                      <Autocomplete value={searchPickup} onChange={setSearchPickup} placeholder="Enter pickup location" className="w-full" />
+                      <LocationAutocomplete 
+                        value={searchPickup?.display_name || ""} 
+                        onLocationSelect={(loc) => setSearchPickup(loc)} 
+                        placeholder="Enter exact pickup location" 
+                        className="w-full" 
+                      />
                     </div>
                     <div className="relative rounded-xl bg-background/60 border border-border/40 px-4 py-2 sm:col-span-2 lg:col-span-1">
                       <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
@@ -626,7 +683,7 @@ function DashboardPage() {
                           arrivalAt={ride.arrivalAt}
                           seatsAvailable={ride.seatsAvailable}
                           pricePerSeat={ride.pricePerSeat}
-                          pickupPoint={searchPickup}
+                          pickupPoint={searchPickup?.display_name || ""}
                           driver={typeof ride.driverId === "object" ? ride.driverId : null}
                           index={i}
                         />
@@ -718,6 +775,14 @@ function DashboardPage() {
                 {driverBookings.map(booking => {
                   const passenger = booking.passengerId;
                   const ride = typeof booking.rideId === "object" ? booking.rideId : null;
+
+                  // Fare Calculation
+                  const totalFare = Math.round((ride?.pricePerSeat || 0) * booking.seats * 1.05);
+                  const advancePaid = Math.round(totalFare * 0.0952);
+                  const baseCashToCollect = totalFare - advancePaid;
+                  const deviationCharge = booking.deviationCharge || 0; 
+                  const finalCashToCollect = booking.driverCashFare || (baseCashToCollect + deviationCharge);
+
                   return (
                     <Dialog key={booking._id}>
                       <DialogTrigger asChild>
@@ -731,11 +796,8 @@ function DashboardPage() {
                             </Avatar>
                             <div>
                               <p className="font-medium text-sm">{passenger?.fullName ?? "Unknown"}</p>
-                              {(passenger as any)?.phone && (
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />{(passenger as any).phone}
-                                </p>
-                              )}
+                              {/* Short Payment Info */}
+                              <p className="text-xs text-green-600 font-bold mt-0.5">Collect: ₹{finalCashToCollect}</p>
                             </div>
                           </div>
                           <div className="flex-1">
@@ -762,7 +824,7 @@ function DashboardPage() {
                         </div>
                       </DialogTrigger>
 
-                      <DialogContent className="sm:max-w-sm">
+                      <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                           <DialogTitle>Passenger &amp; Booking Details</DialogTitle>
                         </DialogHeader>
@@ -804,9 +866,47 @@ function DashboardPage() {
                             </div>
                           </div>
 
+                          {/* 🚨 CORRECTED: Sirf Passenger ka Payment Confirm hoga, poori ride nahi 🚨 */}
+                          <div className="w-full bg-primary/5 rounded-xl border border-primary/20 p-4 mt-2">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                              <Banknote className="h-3 w-3" /> Payment to Collect
+                            </p>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Seat Fare (Remaining)</span>
+                                <span className="font-medium">₹{baseCashToCollect}</span>
+                              </div>
+                              {deviationCharge > 0 && (
+                                <div className="flex justify-between text-orange-600">
+                                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3"/> Extra Pickup Charge</span>
+                                  <span className="font-medium">+₹{deviationCharge}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between items-center pt-2 border-t border-primary/10 mt-2">
+                                <span className="font-bold text-foreground">Total Cash/UPI</span>
+                                <span className="font-bold text-2xl text-green-600">₹{finalCashToCollect}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Naya function lagaya gaya hai confirmPassengerPayment */}
+                            <Button
+                              onClick={() => confirmPassengerPayment(booking._id, passenger?.fullName || "Passenger")}
+                              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold mt-4 shadow-md shadow-green-600/20"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Confirm Payment Received
+                            </Button>
+                            <p className="text-center text-[10px] text-muted-foreground mt-2">
+                               Click this once you receive the payment to mark this specific passenger's payment as received.
+                            </p>
+                          </div>
+
+                          {/* Navigation Route Box */}
+                          <PickupNavigator pickupPoint={booking.pickupPoint} rideOrigin={ride?.origin || ""} />
+
                           {passenger?.phone && (
                             <Button
-                              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold"
+                              className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold mt-2"
                               onClick={() => window.location.href = `tel:${passenger.phone}`}
                             >
                               <Phone className="h-4 w-4 mr-2" /> Call Passenger

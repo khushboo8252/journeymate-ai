@@ -250,5 +250,38 @@ router.patch("/:id/cancel", protect, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+// PUT / PATCH route for confirming passenger payment by driver
+router.patch("/:id/confirm-payment", async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    // 1. Database mein booking dhoondo
+    const booking = await Booking.findById(bookingId); // Ensure aapka model 'Booking' imported ho
+    
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // 2. Booking ka payment status update karo
+    // Note: Aapke database schema (Model) mein inme se jo bhi field ho, use update kar dena
+    booking.isPaymentConfirmedByDriver = true; 
+    
+    // Agar aapne paymentStatus naam ki field rakhi hai to:
+    booking.paymentStatus = "completed"; 
+
+    await booking.save();
+
+    // 3. Success response bhej do jisse frontend ka loader hat jaye aur success toast aaye
+    return res.status(200).json({ 
+      success: true, 
+      message: "Payment confirmed successfully",
+      booking 
+    });
+
+  } catch (error) {
+    console.error("Error confirming payment:", error);
+    return res.status(500).json({ message: "Server error confirming payment" });
+  }
+});
 
 module.exports = router;
