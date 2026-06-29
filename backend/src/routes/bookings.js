@@ -6,7 +6,7 @@ const Seat = require("../models/Seat");
 const User = require("../models/User");
 const { protect, restrictTo } = require("../middleware/auth");
 const { createUpfrontPaymentOrder, processUpfrontPayment } = require("../services/paymentService");
-const { sendBookingNotificationEmail } = require("../utils/email");
+const { sendBookingNotificationEmail, sendPassengerBookingConfirmationEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -161,9 +161,13 @@ router.post(
 
       // Send email notification to driver
       if (driver && driver.email && passenger) {
-        const baseFare = ride.pricePerSeat * booking.seats;
-        const platformFee = baseFare * 0.05;
-        const totalPrice = Math.round(baseFare + platformFee);
+        const basePricePerSeat = ride.pricePerSeat;
+        const baseTotal = basePricePerSeat * booking.seats;
+        const platformFee = Math.round(baseTotal * 0.05);
+        const totalWithFee = baseTotal + platformFee;
+        const upfrontAmount = Math.round(totalWithFee * 0.0952);
+        const remainingAmount = Math.round(totalWithFee - upfrontAmount);
+        
         sendBookingNotificationEmail(
           driver.email,
           driver.fullName,
@@ -173,10 +177,25 @@ router.post(
           ride.destination,
           ride.departureAt,
           booking.seats,
-          totalPrice,
-          baseFare,
+          baseTotal,
           platformFee,
-          0 // GST is now 0
+          upfrontAmount,
+          remainingAmount
+        );
+
+        // Send booking confirmation email to passenger
+        sendPassengerBookingConfirmationEmail(
+          passenger.email,
+          passenger.fullName,
+          driver.fullName,
+          driver.phone,
+          ride.origin,
+          ride.destination,
+          ride.departureAt,
+          booking.seats,
+          totalWithFee,
+          upfrontAmount,
+          remainingAmount
         );
       }
 
