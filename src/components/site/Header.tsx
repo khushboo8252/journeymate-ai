@@ -120,7 +120,7 @@ export function Header() {
   }, [user]);
 
   return (
-    <header className="sticky top-0 z-50 w-full glass border-b border-border/40">
+    <header className="sticky top-0 z-50 w-full bg-white border-b border-border/40">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
         <Link to="/" className="flex items-center gap-2 group">
           <img src={logoImg} alt="Logo" className="h-12 object-contain" />

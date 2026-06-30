@@ -141,7 +141,7 @@ function Home() {
               <div className="mt-10 grid grid-cols-3 gap-4 max-w-2xl mx-auto">
                 {[
                   { v: "1000+", l: "Travelers" },
-                  { v: "100K+", l: "Daily rides" },
+                  { v: "100+", l: "Daily rides" },
                   { v: "4.8★", l: "Avg rating" },
                 ].map((s) => (
                   <div key={s.l} className="text-center">
