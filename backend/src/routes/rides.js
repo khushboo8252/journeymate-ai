@@ -103,7 +103,7 @@ router.post(
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
     // [FIX]: Ab express-validator hardcoded checks ke bajay minimum boundary 1 secure rakhega
-    body("seatsTotal").optional().isInt({ min: 1, max: 15 }).withMessage("Total seats must be at least 1"),
+    body("seatsTotal").optional().isInt({ min: 1, max: 12 }).withMessage("Total seats must be at least 1"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
