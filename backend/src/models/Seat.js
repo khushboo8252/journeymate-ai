@@ -44,6 +44,12 @@ const seatSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  // 🚨 [FIXED]: 'passenger' field explicitly added for booking.routes.js compatibility
+  passenger: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   bookedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -158,6 +164,7 @@ seatSchema.statics.bookSeats = async function(rideId, seatNumbers, userId, booki
       $set: {
         status: 'booked',
         bookedBy: userId,
+        passenger: userId, // 🚨 Kept in sync
         bookingId: bookingId,
         lockedBy: null,
         lockedAt: null,
@@ -181,6 +188,7 @@ seatSchema.statics.releaseBookedSeats = async function(rideId, seatNumbers) {
       $set: {
         status: 'available',
         bookedBy: null,
+        passenger: null, // 🚨 Kept in sync
         bookingId: null
       }
     }

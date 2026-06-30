@@ -72,7 +72,7 @@ type DriverBooking = ApiBooking & {
   pickupPoint?: string | null;
   deviationCharge?: number; 
   driverCashFare?: number;
-  isPaymentConfirmedByDriver?: boolean; // Payment status check
+  isPaymentConfirmedByDriver?: boolean; 
 };
 
 function DashboardPage() {
@@ -349,7 +349,6 @@ function DashboardPage() {
     }
   };
 
-  // ✅ RIDE COMPLETE FUNCTION
   const confirmRide = async (rideId: string) => {
     try {
       const response = await api.patch<{
@@ -370,13 +369,22 @@ function DashboardPage() {
     }
   };
 
-  // 🚨 NAYA: SIRF PASSENGER PAYMENT CONFIRM FUNCTION 🚨
-  const confirmPassengerPayment = async (bookingId: string, passengerName: string) => {
+  // 🚨 [MODIFIED]: Ab Passenger ko instant Socket emission bhi jaayegi
+  const confirmPassengerPayment = async (bookingId: string, passengerName: string, rideId?: string, passengerUserId?: string) => {
     try {
-      // Backend ko API call karo jo us specific booking ki payment receive mark karegi
       await api.patch(`/api/bookings/${bookingId}/confirm-payment`);
+      
+      // Emit socket event to notify passenger immediately
+      if (rideId && passengerUserId) {
+        const socket = getSocket();
+        socket.emit('payment_confirmed', { 
+          rideId: rideId, 
+          passengerId: passengerUserId 
+        });
+      }
+
       toast.success(`Payment confirmed for ${passengerName}`);
-      fetchData(); // UI update karne ke liye refetch
+      fetchData(); // UI update
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to confirm payment");
     }
@@ -441,7 +449,6 @@ function DashboardPage() {
       <main className="flex-1 container mx-auto px-4 md:px-6 py-10 max-w-4xl">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           
-          {/* Profile header */}
           <div className="glass rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center gap-5">
             <Avatar className="h-16 w-16 border-2 border-primary/30">
               <AvatarImage src={(user as any).avatarUrl || undefined} alt={user.fullName || "User"} />
@@ -490,7 +497,6 @@ function DashboardPage() {
             </div>
           </div>
 
-          {/* Approval Popup */}
           {showApprovalPopup && (
             <motion.div
               initial={{ opacity: 0, y: -50 }}
@@ -525,7 +531,6 @@ function DashboardPage() {
             </motion.div>
           )}
 
-          {/* Cancellation warning */}
           {isDriver && (user as any).rideCancellationCount > 0 && !(user as any).isBlocked && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -546,7 +551,6 @@ function DashboardPage() {
             </motion.div>
           )}
 
-          {/* Blocked driver warning */}
           {isDriver && (user as any).isBlocked && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -776,7 +780,6 @@ function DashboardPage() {
                   const passenger = booking.passengerId;
                   const ride = typeof booking.rideId === "object" ? booking.rideId : null;
 
-                  // Fare Calculation
                   const totalFare = Math.round((ride?.pricePerSeat || 0) * booking.seats * 1.05);
                   const advancePaid = Math.round(totalFare * 0.0952);
                   const baseCashToCollect = totalFare - advancePaid;
@@ -866,7 +869,7 @@ function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* 🚨 CORRECTED: Sirf Passenger ka Payment Confirm hoga, poori ride nahi 🚨 */}
+                          {/* 🚨 PAYMENT BREAKDOWN BOX 🚨 */}
                           <div className="w-full bg-primary/5 rounded-xl border border-primary/20 p-4 mt-2">
                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                               <Banknote className="h-3 w-3" /> Payment to Collect
@@ -888,17 +891,26 @@ function DashboardPage() {
                               </div>
                             </div>
                             
-                            {/* Naya function lagaya gaya hai confirmPassengerPayment */}
-                            <Button
-                              onClick={() => confirmPassengerPayment(booking._id, passenger?.fullName || "Passenger")}
-                              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold mt-4 shadow-md shadow-green-600/20"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Confirm Payment Received
-                            </Button>
-                            <p className="text-center text-[10px] text-muted-foreground mt-2">
-                               Click this once you receive the payment to mark this specific passenger's payment as received.
-                            </p>
+                            {/* 🚨 [MODIFIED]: Disable button if already confirmed 🚨 */}
+                            {booking.isPaymentConfirmedByDriver ? (
+                              <div className="mt-4 bg-green-500/10 border border-green-500/20 rounded-xl p-3 flex flex-col items-center justify-center">
+                                <CheckCircle className="h-6 w-6 text-green-600 mb-1" />
+                                <span className="text-sm font-bold text-green-600">Payment Received</span>
+                              </div>
+                            ) : (
+                              <>
+                                <Button
+                                  onClick={() => confirmPassengerPayment(booking._id, passenger?.fullName || "Passenger", ride?._id, passenger?._id)}
+                                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold mt-4 shadow-md shadow-green-600/20"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Confirm Payment Received
+                                </Button>
+                                <p className="text-center text-[10px] text-muted-foreground mt-2">
+                                   Click this once you receive the payment to mark this specific passenger's payment as received.
+                                </p>
+                              </>
+                            )}
                           </div>
 
                           {/* Navigation Route Box */}

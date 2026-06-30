@@ -28,9 +28,11 @@ export async function calculatePickupDeviation(
     const extraDistanceMeters = detourDistanceMeters - directDistanceMeters;
     let extraKm = extraDistanceMeters / 1000;
 
-    if (extraKm < 1) {
+    // 🚨 [FIXED]: Ab koi 1km ka free buffer nahi hai. 0 se upar jate hi charge shuru.
+    if (extraKm <= 0) {
       extraKm = 0;
     } else {
+      // Decimal ke ek point tak round off karega (e.g. 0.4 km)
       extraKm = Math.round(extraKm * 10) / 10;
     }
 

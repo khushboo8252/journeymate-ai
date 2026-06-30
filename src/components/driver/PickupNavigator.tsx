@@ -17,7 +17,7 @@ export function PickupNavigator({ pickupPoint, rideOrigin }: PickupNavigatorProp
   const saddr = encodeURIComponent(rideOrigin); // Source (Driver Origin)
   const daddr = encodeURIComponent(pickupPoint); // Destination (Passenger Pickup)
   
-  // URL trick jo direct Route Line banayegi Origin se Pickup tak
+  // 🚨 [FIXED]: Corrected Google Maps Embed & App Routing URLs
   const embedUrl = `https://maps.google.com/maps?saddr=${saddr}&daddr=${daddr}&output=embed`;
   const appUrl = `https://www.google.com/maps/dir/?api=1&origin=${saddr}&destination=${daddr}`;
 

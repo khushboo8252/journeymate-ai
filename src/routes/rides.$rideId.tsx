@@ -18,6 +18,7 @@ import {
   Shield,
   MapPin,
   Clock,
+  CheckCircle, // 🚨 ADDED
 } from "lucide-react";
 import { DriverLocationMap } from "@/components/maps/DriverLocationMap";
 import { LocationTracker } from "@/components/driver/LocationTracker";
@@ -60,10 +61,13 @@ function RideDetailPage() {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
-  const [seatsToBook, setSeatsToBook] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("online");
+  
+  // 🚨 [NEW STATES]: Booking memory & Payment notification state
+  const [myBooking, setMyBooking] = useState<any>(null);
+  const [bookedSeatsCount, setBookedSeatsCount] = useState(0); 
+  const [paymentNotified, setPaymentNotified] = useState(false);
 
-  // 🚨 [NEW FEATURE]: Pickup Point State
+  // Pickup Point State
   const searchParams = Route.useSearch() as any;
   const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
 
@@ -71,6 +75,8 @@ function RideDetailPage() {
   const [seatsList, setSeatsList] = useState<any[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
+
+  const seatsToBook = selectedSeats.length;
 
   // Live location state
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -115,18 +121,23 @@ function RideDetailPage() {
       }
     });
 
+    // 🚨 [MODIFIED]: Ab driver action par booking DB dobara check karega
     socket.on("driver_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && !isDriver) {
         playAlertSound();
-        toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
         fetchRide();
+        checkExistingBooking(); // Refresh to check if payment was accepted
       }
+    });
+    
+    // Generic re-fetch trigger in case backend sends custom event
+    socket.on("payment_confirmed", () => {
+      checkExistingBooking();
     });
 
     socket.on("passenger_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && isDriver) {
         playAlertSound();
-        toast.success("Passenger has confirmed ride completion.");
         fetchRide();
       }
     });
@@ -136,6 +147,7 @@ function RideDetailPage() {
         playAlertSound();
         toast.success("Ride completed successfully!");
         fetchRide();
+        checkExistingBooking();
       }
     });
 
@@ -161,6 +173,7 @@ function RideDetailPage() {
       socket.off("location_tracking_started");
       socket.off("location_tracking_stopped");
       socket.off("driver_confirmed_completion");
+      socket.off("payment_confirmed");
       socket.off("passenger_confirmed_completion");
       socket.off("ride_completed");
       socket.off("booking_transferred");
@@ -199,7 +212,8 @@ function RideDetailPage() {
       setLoadingSeats(true);
       const res = await api.get<any>(`/api/rides/${rideId}/seats`);
       const rawSeats = Array.isArray(res) ? res : res.seats || [];
-      setSeatsList(rawSeats.filter((s: any) => s.seatNumber !== "A1")); 
+      // Strictly ignore A1 (driver)
+      setSeatsList(rawSeats.filter((s: any) => s.seatNumber !== "A1" && s.type !== "driver")); 
     } catch (err) {
       console.error("Failed to load seats", err);
     } finally {
@@ -207,22 +221,31 @@ function RideDetailPage() {
     }
   };
 
+  // 🚨 [MODIFIED]: Ab ye function poori booking object store karega
   const checkExistingBooking = async () => {
     if (!user || !ride) return;
     try {
-      const bookings = await api.get<{ _id: string; status: string }[]>("/api/bookings/my");
-      const found = bookings.some((b: { _id: string; status: string } & { rideId?: string }) =>
-        (typeof b.rideId === "string" ? b.rideId : (b.rideId as unknown as ApiRide)?._id) === ride._id &&
+      const bookings = await api.get<any[]>("/api/bookings/my");
+      const found = bookings.find((b: any) =>
+        (typeof b.rideId === "string" ? b.rideId : b.rideId?._id) === ride._id &&
         b.status === "confirmed"
       );
-      setAlreadyBooked(found);
+      if (found) {
+        setAlreadyBooked(true);
+        setBookedSeatsCount(found.seats || 1);
+        setMyBooking(found); // DB se payment status yahan mil jayega
+      } else {
+        setAlreadyBooked(false);
+        setMyBooking(null);
+      }
     } catch {
       setAlreadyBooked(false);
+      setMyBooking(null);
     }
   };
 
   const toggleSeatSelection = (seatNumber: string) => {
-    if (seatNumber === "A1") return; 
+    if (seatNumber === "A1") return; // Explicit driver safety check
 
     let updatedSeats: string[];
     if (selectedSeats.includes(seatNumber)) {
@@ -231,7 +254,6 @@ function RideDetailPage() {
       updatedSeats = [...selectedSeats, seatNumber];
     }
     setSelectedSeats(updatedSeats);
-    setSeatsToBook(Math.max(1, updatedSeats.length));
   };
 
   const bookRide = async () => {
@@ -243,7 +265,6 @@ function RideDetailPage() {
     try {
       await api.post(`/api/rides/${ride._id}/seats/lock`, { seatNumbers: selectedSeats });
 
-      // 🚨 [UPDATE]: Added pickupPoint to the payload
       const bookingResponse = await api.post<{
         booking: { _id: string };
         paymentOrder?: { keyId: string; amount: number; currency: string; orderId: string };
@@ -253,7 +274,7 @@ function RideDetailPage() {
         rideId: ride._id, 
         seats: selectedSeats.length, 
         seatNumbers: selectedSeats,
-        pickupPoint: pickupPoint.trim() || undefined // Added pickup point here
+        pickupPoint: pickupPoint.trim() || undefined
       });
 
       if (bookingResponse.requiresPayment && bookingResponse.paymentOrder) {
@@ -285,10 +306,12 @@ function RideDetailPage() {
                 });
                 toast.success(`Seats ${selectedSeats.join(", ")} booked successfully!`);
                 setAlreadyBooked(true);
+                setBookedSeatsCount(selectedSeats.length); 
                 setSelectedSeats([]);
-                setPickupPoint(""); // Reset input
+                setPickupPoint(""); 
                 fetchRide();
                 fetchPassengerSeats();
+                checkExistingBooking(); // Refresh state
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
               }
@@ -325,10 +348,12 @@ function RideDetailPage() {
       } else {
         toast.success(`Seats ${selectedSeats.join(", ")} booked! Have a great journey.`);
         setAlreadyBooked(true);
+        setBookedSeatsCount(selectedSeats.length); 
         setSelectedSeats([]);
-        setPickupPoint(""); // Reset input
+        setPickupPoint(""); 
         fetchRide();
         fetchPassengerSeats();
+        checkExistingBooking();
         setBooking(false);
       }
     } catch (err) {
@@ -789,13 +814,11 @@ function RideDetailPage() {
                           )}
                         </div>
 
-                        {/* Summary Details */}
                         <div className="flex justify-between text-xs text-muted-foreground px-1">
                           <span>Selected: <strong className="text-foreground">{selectedSeats.length > 0 ? selectedSeats.join(", ") : "None"}</strong></span>
-                          <span>Count: <strong className="text-foreground">{selectedSeats.length}</strong></span>
+                          <span>Count: <strong className="text-foreground">{seatsToBook}</strong></span>
                         </div>
 
-                        {/* 🚨 [NEW FEATURE UI]: Optional Exact Pickup Point */}
                         <div className="space-y-1.5 py-2 border-t border-border/30">
                           <Label className="text-xs text-muted-foreground">Exact Pickup Point (Optional)</Label>
                           <div className="relative">
@@ -809,25 +832,26 @@ function RideDetailPage() {
                           </div>
                         </div>
 
-                        {/* 🚨 [MODIFIED]: Added breakdown text above button */}
-                        {selectedSeats.length > 0 && (
+                        {seatsToBook > 0 && (
                           <div className="text-center bg-muted/20 border border-border/50 rounded-lg p-2 mb-2">
                             <p className="text-xs text-muted-foreground">
                               Online advance fee: <span className="font-semibold text-foreground">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)}</span>
                             </p>
                             <p className="text-[11px] text-muted-foreground mt-0.5">
-                              (Remaining <span className="font-semibold text-primary">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</span> to be paid to driver during the ride)
+                              (Remaining <span className="font-semibold text-primary">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</span> to be paid to driver)
                             </p>
                           </div>
                         )}
 
                         <Button
                           onClick={bookRide}
-                          disabled={booking || selectedSeats.length === 0}
+                          disabled={booking || seatsToBook === 0}
                           className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-12 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
                         >
                           {booking ? (
                             <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                          ) : seatsToBook === 0 ? (
+                            <>Select seats to book</>
                           ) : (
                             <>Book {seatsToBook} seat{seatsToBook > 1 ? 's' : ''} at ₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)}</>
                           )}
@@ -840,59 +864,64 @@ function RideDetailPage() {
                     <p className="text-center text-sm text-muted-foreground py-2">{t("ride_details.fully_booked")}</p>
                   )}
 
-                  {/* Ride completion confirmation */}
+                  {/* 🚨 [MODIFIED]: New Passenger Payment Flow 🚨 */}
                   {alreadyBooked && ride.status === "active" && (
-                    <div className="space-y-3 pt-3 border-t border-border/30">
-                      <div className="text-center space-y-2">
-                        {ride.confirmByDriver && !ride.confirmByPassenger && (
-                          <p className="text-sm text-green-600 font-medium">{t("ride_details.driver_confirmed")}</p>
-                        )}
-                        {!ride.confirmByDriver && ride.confirmByPassenger && (
-                          <p className="text-sm text-amber-600 font-medium">{t("ride_details.waiting_driver")}</p>
-                        )}
-                        {ride.confirmByDriver && ride.confirmByPassenger && (
-                          <p className="text-sm text-green-600 font-medium">{t("ride_details.ride_completed")}</p>
-                        )}
-                        {!ride.confirmByDriver && !ride.confirmByPassenger && (
-                          <p className="text-sm text-muted-foreground">{t("ride_details.confirm_completion")}</p>
-                        )}
-                      </div>
+                    <div className="space-y-3 pt-4 border-t border-border/30">
                       
-                      {/* 🚨 [MODIFIED]: Single button to "Pay Driver" */}
-                      {!ride.confirmByPassenger && (
+                      {/* State 3: Payment Confirmed by Driver */}
+                      {myBooking?.isPaymentConfirmedByDriver ? (
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
+                          <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                          <p className="text-sm text-green-600 font-bold">Payment Confirmed!</p>
+                          <p className="text-xs text-green-600/80 mt-1">The driver has successfully received your payment.</p>
+                        </div>
+                      ) 
+                      
+                      /* State 2: Passenger clicked button, waiting for driver */
+                      : paymentNotified ? (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
+                          <Loader2 className="h-6 w-6 animate-spin text-amber-500 mx-auto mb-2" />
+                          <p className="text-sm text-amber-600 font-medium">Waiting for driver to confirm...</p>
+                          <p className="text-xs text-amber-600/80 mt-1">Please ask the driver to check their dashboard to accept your payment.</p>
+                        </div>
+                      ) 
+                      
+                      /* State 1: Initial State to pay driver */
+                      : (
                         <div className="space-y-3">
-                          <div className="bg-primary/10 rounded-lg p-3 text-center">
-                            <p className="text-sm text-muted-foreground">Pay to driver</p>
-                            <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</p>
+                          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-center">
+                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Pay to driver</p>
+                            <p className="text-2xl font-bold text-foreground">
+                              ₹{Math.round(ride.pricePerSeat * bookedSeatsCount * 1.05 - (ride.pricePerSeat * bookedSeatsCount * 1.05 * 0.0952))}
+                            </p>
                           </div>
                           
                           <Button
                             onClick={async () => {
                               try {
-                                await api.patch(`/api/rides/${rideId}/confirm/passenger`);
-                                
-                                // Send socket notification to driver
+                                // Just emit socket event to notify driver without changing whole ride status
                                 const driverUserId = typeof ride?.driverId === "object" ? ride?.driverId?._id : ride?.driverId;
                                 const socket = getSocket();
                                 socket.emit('passenger_paid_driver', { 
                                   rideId: rideId, 
                                   driverId: driverUserId, 
-                                  amount: Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)), 
+                                  amount: Math.round(ride.pricePerSeat * bookedSeatsCount * 1.05 - (ride.pricePerSeat * bookedSeatsCount * 1.05 * 0.0952)), 
                                   passengerName: user?.fullName 
                                 });
 
                                 toast.success("Payment notification sent to driver.");
-                                fetchRide();
+                                setPaymentNotified(true); // Disable button & change UI instantly
                               } catch (err) {
                                 toast.error("Failed to notify driver.");
                               }
                             }}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg shadow-green-600/30 h-12 rounded-xl"
                           >
                             I have paid the driver
                           </Button>
                         </div>
                       )}
+
                     </div>
                   )}
                 </div>
