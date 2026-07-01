@@ -30,10 +30,18 @@ const ALLOWED_ORIGINS = [
   "http://localhost:8081",
 ].filter(Boolean);
 
-// Socket.io setup
+// Socket.io setup - always allow localhost for development
+const SOCKET_ORIGINS = [
+  ...ALLOWED_ORIGINS,
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "http://localhost:8081",
+];
+
 const io = new Server(httpServer, {
   cors: {
-    origin: ALLOWED_ORIGINS,
+    origin: SOCKET_ORIGINS,
     credentials: true,
   },
 });
