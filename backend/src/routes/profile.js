@@ -40,6 +40,13 @@ router.put(
         },
         { new: true }
       );
+
+      // Emit real-time event to admin dashboard for profile updates
+      global.io.emit("user_profile_updated", {
+        userId: user._id,
+        user: user.toPublic()
+      });
+
       res.json({ status: "success", user: user.toPublic() });
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -104,6 +111,13 @@ router.put(
 
       // Send email notification to admin
       await sendDriverApprovalRequestEmail(user);
+
+      // Emit real-time event to admin dashboard
+      global.io.emit("driver_profile_updated", {
+        userId: user._id,
+        user: user.toPublic(),
+        requiresApproval: true
+      });
 
       res.json({ status: "success", user: user.toPublic(), requiresApproval: true });
     } catch (err) {
