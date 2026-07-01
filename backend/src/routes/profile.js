@@ -67,8 +67,8 @@ router.put(
     body("avatarUrl").optional().trim(),
     body("avatarPublicId").optional().trim(),
     body("vehicleSeats")
-      .isInt({ min: 4, max: 12 })
-      .withMessage("Vehicle seats must be between 4 and 12"),
+      .isInt({ min: 4, max: 15 })
+      .withMessage("Vehicle seats must be between 4 and 15"),
     body("bankAccountNumber")
       .trim()
       .isLength({ min: 9, max: 18 })
