@@ -81,19 +81,17 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
 
       {/* Seat rows */}
       <div className="space-y-5 mt-6">
+        {/* 🚨 FIX: Corrected curly braces here */}
         {rowOrder.map((row) => {
-          // Row A ke liye hum custom handling karenge taaki sorting isko left me na dhakele
           let sortedSeats = [...rows[row]];
           
           if (row === "A") {
-            // Row A me explicit sorting: Pehle A2 (Passenger), phir A1 (Driver)
             const pSeat = sortedSeats.find(s => s.seatNumber === "A2");
             const dSeat = sortedSeats.find(s => s.seatNumber === "A1");
             sortedSeats = [];
             if (pSeat) sortedSeats.push(pSeat);
             if (dSeat) sortedSeats.push(dSeat);
           } else {
-            // Baki rows ke liye normal left-to-right sorting based on position
             sortedSeats.sort((a, b) => a.position - b.position);
           }
 
@@ -214,11 +212,12 @@ export function DriverSeatMap({ rideId, seats, vehicleType }: DriverSeatMapProps
       </div>
 
       {/* Summary */}
+      {/* 🚨 [FIXED LOGIC]: Driver ko dono taraf se bilkul alag kar diya hai */}
       <div className="pt-4 border-t border-border/30">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Total passengers</span>
           <span className="font-semibold">
-            {seats.filter(s => s.status === 'booked' && s.seatNumber !== 'A1').length} / {seats.length - (seats.some(s => s.seatNumber === 'A1') ? 1 : 0)}
+            {seats.filter(s => s.status === 'booked' && s.type !== 'driver' && s.seatNumber !== 'A1').length} / {seats.filter(s => s.type !== 'driver' && s.seatNumber !== 'A1').length}
           </span>
         </div>
       </div>

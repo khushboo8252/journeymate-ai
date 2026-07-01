@@ -90,7 +90,6 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-
 // POST /api/rides — create ride (drivers only)
 router.post(
   "/",

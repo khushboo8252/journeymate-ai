@@ -431,7 +431,7 @@ const onSubmit = async (values: FormValues) => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                      {[4,5,6,7,8,9,10,11,12].map(n => (
                         <SelectItem key={n} value={String(n)}>{n} seat{n > 1 ? 's' : ''}</SelectItem>
                       ))}
                     </SelectContent>

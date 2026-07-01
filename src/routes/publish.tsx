@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { Car, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LocationAutocomplete, type LocationData } from "@/components/ui/LocationAutocomplete";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 
@@ -67,6 +69,10 @@ function PublishPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
+  // 🚨 NAYE STATES: Map coordinates track karne ke liye
+  const [originLoc, setOriginLoc] = useState<LocationData | null>(null);
+  const [destLoc, setDestLoc] = useState<LocationData | null>(null);
+
   const maxAllowedSeats = user?.vehicleSeats ? Number(user.vehicleSeats) : 5;
   const timeSlots = generateTimeSlots();
 
@@ -112,6 +118,9 @@ function PublishPage() {
       await api.post("/api/rides", {
         origin: values.origin,
         destination: values.destination,
+        // 🚨 FUTURE-PROOFING: Send coordinates if available (from map), otherwise null (if manual)
+        originCoords: originLoc?.lat ? { lat: originLoc.lat, lng: originLoc.lon } : null,
+        destinationCoords: destLoc?.lat ? { lat: destLoc.lat, lng: destLoc.lon } : null,
         departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
         arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
         seatsTotal: seatCount,
@@ -201,16 +210,33 @@ function PublishPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="glass rounded-2xl p-6 space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              
+              {/* 🚨 ORIGIN FIELD REPLACED */}
               <div className="space-y-1.5">
                 <Label>{t("publish.origin")}</Label>
-                <Input placeholder={t("publish.origin_ph")} {...register("origin")} />
+                <LocationAutocomplete 
+                  placeholder={t("publish.origin_ph")}
+                  onLocationSelect={(loc) => {
+                    setValue("origin", loc.display_name, { shouldValidate: true });
+                    setOriginLoc(loc);
+                  }}
+                />
                 {errors.origin && <p className="text-xs text-destructive">{t("publish.origin")}</p>}
               </div>
+
+              {/* 🚨 DESTINATION FIELD REPLACED */}
               <div className="space-y-1.5">
                 <Label>{t("publish.destination")}</Label>
-                <Input placeholder={t("publish.destination_ph")} {...register("destination")} />
+                <LocationAutocomplete 
+                  placeholder={t("publish.destination_ph")}
+                  onLocationSelect={(loc) => {
+                    setValue("destination", loc.display_name, { shouldValidate: true });
+                    setDestLoc(loc);
+                  }}
+                />
                 {errors.destination && <p className="text-xs text-destructive">{t("publish.destination")}</p>}
               </div>
+
               <div className="space-y-1.5">
                 <Label>{t("publish.date")}</Label>
                 <Input type="date" min={new Date().toISOString().split("T")[0]} {...register("date")} />

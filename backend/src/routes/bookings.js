@@ -56,7 +56,8 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { rideId, seats, seatNumbers, pickupPoint } = req.body;
+    // 🚨 NAYA LOGIC: deviationCharge aur driverCashFare backend receive karega
+    const { rideId, seats, seatNumbers, pickupPoint, deviationCharge, driverCashFare } = req.body;
     const userId = req.user._id;
 
     try {
@@ -81,6 +82,8 @@ router.post(
         seats: seats,
         seatNumbers: seatNumbers || [],
         pickupPoint: pickupPoint || null, 
+        deviationCharge: deviationCharge || 0, // 🚨 SAVE EXTRA CHARGE
+        driverCashFare: driverCashFare || 0,   // 🚨 SAVE TOTAL CASH
         status: "pending_payment"
       });
 
@@ -267,6 +270,39 @@ router.patch("/:id/cancel", protect, async (req, res) => {
   } catch (err) {
     console.error("Cancel booking error:", err);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// 🚨 SECURED ROUTE: Driver confirms passenger payment
+router.patch("/:id/confirm-payment", protect, restrictTo("driver"), async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    // Fetch booking along with ride details to check driver ownership
+    const booking = await Booking.findById(bookingId).populate("rideId");
+    
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // Security Check: Make sure the person clicking is actually the driver of this ride
+    if (String(booking.rideId.driverId) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Unauthorized. Only the driver of this ride can confirm payment." });
+    }
+
+    // Update payment status
+    booking.isPaymentConfirmedByDriver = true; 
+    await booking.save();
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Payment confirmed successfully",
+      booking 
+    });
+
+  } catch (error) {
+    console.error("Error confirming payment:", error);
+    return res.status(500).json({ message: "Server error confirming payment" });
   }
 });
 
