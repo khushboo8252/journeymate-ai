@@ -100,7 +100,7 @@ export const en = {
     approval_popup: "Your driver profile has been approved! You can now publish rides.",
     publish_now: "Publish now",
     dismiss: "Dismiss",
-    cancellation_warning: "You have cancelled {count} ride(s). {remaining} more cancellation(s) will block your account.",
+    cancellation_warning: "You have cancelled {{count}} ride(s). {{remaining}} more cancellation(s) will block your account.",
     blocked_warning: "Your account has been blocked due to excessive ride cancellations. Please contact support.",
     seat_map: "Seat Map",
     confirm_complete: "Confirm Complete",

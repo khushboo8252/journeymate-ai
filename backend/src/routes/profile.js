@@ -54,6 +54,8 @@ router.put(
   }
 );
 
+
+
 // PUT /api/profile/driver — driver onboarding (drivers only)
 router.put(
   "/driver",
@@ -65,8 +67,8 @@ router.put(
     body("avatarUrl").optional().trim(),
     body("avatarPublicId").optional().trim(),
     body("vehicleSeats")
-      .isInt({ min: 1, max: 15 })
-      .withMessage("Vehicle seats must be between 1 and 15"),
+      .isInt({ min: 4, max: 12 })
+      .withMessage("Vehicle seats must be between 4 and 12"),
     body("bankAccountNumber")
       .trim()
       .isLength({ min: 9, max: 18 })
@@ -80,11 +82,16 @@ router.put(
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log("Driver profile validation errors:", errors.array());
-      console.log("Request body:", req.body);
       return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
     }
 
-    const { fullName, phone, avatarUrl, avatarPublicId, vehicleSeats, bankAccountNumber, ifscCode, vehicleNumber, drivingLicense, aadharCard, panCard, rc, vehicleImage } = req.body;
+    // 🚨 YAHAN DEKHIYE: Maine insuranceCertificate aur pollutionCertificate add kar diye hain
+    const { 
+      fullName, phone, avatarUrl, avatarPublicId, vehicleSeats, 
+      bankAccountNumber, ifscCode, vehicleNumber, drivingLicense, 
+      aadharCard, panCard, rc, vehicleImage, 
+      insuranceCertificate, pollutionCertificate 
+    } = req.body;
 
     try {
       const user = await User.findByIdAndUpdate(
@@ -103,14 +110,24 @@ router.put(
           ...(panCard && { panCard }),
           ...(rc && { rc }),
           ...(vehicleImage && { vehicleImage }),
+          // 🚨 YAHAN BHI ADD KIYE HAIN TAHR DB MEIN SAVE HO SAKEIN
+          ...(insuranceCertificate && { insuranceCertificate }),
+          ...(pollutionCertificate && { pollutionCertificate }),
           isProfileComplete: true,
-          isApproved: false, // Requires admin approval
+          isApproved: false, 
         },
-        { new: true }
+        { new: true, runValidators: true } 
       );
 
-      // Send email notification to admin
-      await sendDriverApprovalRequestEmail(user);
+      if (!user) {
+        return res.status(404).json({ message: "User not found." });
+      }
+
+      try {
+        await sendDriverApprovalRequestEmail(user);
+      } catch (emailError) {
+        console.error("⚠️ Email Sending Failed:", emailError.message);
+      }
 
       // Emit real-time event to admin dashboard
       global.io.emit("driver_profile_updated", {
@@ -120,12 +137,16 @@ router.put(
       });
 
       res.json({ status: "success", user: user.toPublic(), requiresApproval: true });
+      
     } catch (err) {
-      res.status(500).json({ message: err.message });
+      console.error("🚨 Backend Crash Error:", err); 
+      if (err.name === "ValidationError") {
+        return res.status(400).json({ message: "Database validation failed", error: err.message });
+      }
+      res.status(500).json({ message: "Something went wrong on the server.", error: err.message });
     }
   }
 );
-
 // GET /api/profile/driver/banking — return masked banking details (driver only)
 router.get("/driver/banking", protect, restrictTo("driver"), async (req, res) => {
   try {

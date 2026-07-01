@@ -26,12 +26,10 @@ router.post(
     const { username, password } = req.body;
 
     try {
-      // Check credentials against .env
       if (username !== process.env.ADMIN_USERNAME || password !== process.env.ADMIN_PASSWORD) {
         return res.status(401).json({ error: "Invalid username or password" });
       }
 
-      // Generate admin token with type "admin"
       const token = jwt.sign(
         { type: "admin", username },
         process.env.JWT_SECRET,
@@ -58,8 +56,9 @@ router.get("/users", adminAuth, async (req, res) => {
 // GET /api/admin/drivers — get all drivers with detailed info
 router.get("/drivers", adminAuth, async (req, res) => {
   try {
+    // 🚨 [FIX]: Yahan par insuranceCertificate aur pollutionCertificate add kar diye hain
     const drivers = await User.find({ role: "driver" })
-      .select("+bankAccountNumber +ifscCode")
+      .select("fullName email phone role avatarUrl vehicleSeats vehicleNumber isProfileComplete bankAccountNumber ifscCode earnings isBlocked isApproved createdAt drivingLicense aadharCard panCard rc vehicleImage insuranceCertificate pollutionCertificate")
       .sort({ createdAt: -1 });
 
     // Get detailed stats for each driver
@@ -69,11 +68,11 @@ router.get("/drivers", adminAuth, async (req, res) => {
         const completedRides = await Ride.countDocuments({ driverId: driver._id, status: "completed" });
         const activeRides = await Ride.countDocuments({ driverId: driver._id, status: "active" });
 
-        // Calculate earnings from completed rides (sum of pricePerSeat * seatsTotal)
+        // Calculate earnings from completed rides
         const rides = await Ride.find({ driverId: driver._id, status: "completed" });
         const revenue = rides.reduce((sum, ride) => sum + (ride.pricePerSeat * (ride.seatsTotal - ride.seatsAvailable)), 0);
 
-        // Get pending passengers (confirmed bookings for active rides)
+        // Get pending passengers
         const activeRideIds = (await Ride.find({ driverId: driver._id, status: "active" })).map(r => r._id);
         const pendingBookings = await Booking.countDocuments({
           rideId: { $in: activeRideIds },
@@ -105,11 +104,9 @@ router.post("/drivers/:id/release-payment", adminAuth, async (req, res) => {
     if (!driver) return res.status(404).json({ message: "Driver not found." });
     if (driver.role !== "driver") return res.status(400).json({ message: "User is not a driver." });
 
-    // Calculate total earnings from completed rides
     const rides = await Ride.find({ driverId: driver._id, status: "completed" });
     const totalEarnings = rides.reduce((sum, ride) => sum + (ride.pricePerSeat * (ride.seatsTotal - ride.seatsAvailable)), 0);
 
-    // Update driver's earnings (or could transfer to bank)
     driver.earnings = totalEarnings;
     await driver.save();
 
@@ -129,7 +126,6 @@ router.post("/drivers/:id/block", adminAuth, async (req, res) => {
     driver.isBlocked = true;
     await driver.save();
 
-    // Cancel all active rides for blocked driver
     await Ride.updateMany(
       { driverId: driver._id, status: "active" },
       { status: "cancelled" }
@@ -165,14 +161,14 @@ router.post("/drivers/:id/approve", adminAuth, async (req, res) => {
     if (driver.role !== "driver") return res.status(400).json({ message: "User is not a driver." });
 
     driver.isApproved = true;
-    driver.hasSeenApprovalNotification = false; // Reset flag to show popup
+    driver.hasSeenApprovalNotification = false;
     await driver.save();
 
-    // Send email notification to driver
     await sendDriverApprovalEmail(driver.email, driver.fullName, true);
 
-    // Emit real-time event for driver approval
-    global.io.to(`user_${driver._id}`).emit("driver_approved", driver);
+    if (global.io) {
+      global.io.to(`user_${driver._id}`).emit("driver_approved", driver);
+    }
 
     res.json({ message: "Driver profile approved successfully" });
   } catch (err) {
@@ -199,17 +195,17 @@ router.post("/drivers/:id/reject",
     driver.isApproved = false;
     driver.isProfileComplete = false;
     driver.rejectionReason = req.body.rejectionReason || null;
-    driver.hasSeenApprovalNotification = false; // Reset flag to show rejection notification
+    driver.hasSeenApprovalNotification = false;
     await driver.save();
 
-    // Send email notification to driver
     await sendDriverApprovalEmail(driver.email, driver.fullName, false);
 
-    // Emit real-time event for driver rejection with reason
-    global.io.to(`user_${driver._id}`).emit("driver_rejected", { 
-      driver, 
-      rejectionReason: driver.rejectionReason 
-    });
+    if (global.io) {
+      global.io.to(`user_${driver._id}`).emit("driver_rejected", { 
+        driver, 
+        rejectionReason: driver.rejectionReason 
+      });
+    }
 
     res.json({ message: "Driver profile rejected successfully" });
   } catch (err) {
@@ -223,7 +219,6 @@ router.delete("/users/:id", adminAuth, async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    // Also delete user's rides and bookings
     await Ride.deleteMany({ driverId: req.params.id });
     await Booking.deleteMany({ passengerId: req.params.id });
 
@@ -252,7 +247,6 @@ router.delete("/rides/:id", adminAuth, async (req, res) => {
     const ride = await Ride.findById(req.params.id);
     if (!ride) return res.status(404).json({ message: "Ride not found." });
 
-    // Also delete bookings for this ride
     await Booking.deleteMany({ rideId: req.params.id });
 
     await Ride.findByIdAndDelete(req.params.id);
@@ -281,7 +275,6 @@ router.delete("/bookings/:id", adminAuth, async (req, res) => {
     const booking = await Booking.findById(req.params.id);
     if (!booking) return res.status(404).json({ message: "Booking not found." });
 
-    // Restore seat availability
     await Ride.findByIdAndUpdate(booking.rideId, {
       $inc: { seatsAvailable: booking.seats },
     });

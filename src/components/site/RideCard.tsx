@@ -18,6 +18,7 @@ interface RideCardProps {
     avatarUrl?: string | null;
   } | null;
   index?: number;
+  pickupPoint?: string; // ✅ NAYA PROP ADD KIYA: Pickup Point aage bhejne ke liye
 }
 
 function formatDuration(minutes: number) {
@@ -28,15 +29,13 @@ function formatDuration(minutes: number) {
   return `${h}h ${m}min`;
 }
 
-// Calculate final price for passengers: base + 5% platform fee + 9.52% GST
+// Calculate final price for passengers: base + 5% platform fee (no GST)
 function calculateFinalPrice(basePrice: number): number {
   const platformFee = basePrice * 0.05; // 5%
-  const afterFee = basePrice + platformFee;
-  const gst = afterFee * 0.0952; // 9.52%
-  return afterFee + gst;
+  return basePrice + platformFee;
 }
 
-export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0 }: RideCardProps) {
+export function RideCard({ id, origin, destination, departureAt, arrivalAt, seatsAvailable, pricePerSeat, driver, index = 0, pickupPoint }: RideCardProps) {
   const navigate = useNavigate();
   const departure = new Date(departureAt);
   const arrival = arrivalAt ? new Date(arrivalAt) : null;
@@ -47,7 +46,12 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
     : "?";
 
   const handleCardClick = () => {
-    navigate({ to: "/rides/$rideId", params: { rideId: id } });
+    // ✅ FIX: URL mein pickup point pass kar rahe hain
+    navigate({ 
+      to: "/rides/$rideId", 
+      params: { rideId: id },
+      search: pickupPoint ? { pickup: pickupPoint } : undefined as any 
+    });
   };
 
   return (
@@ -122,7 +126,12 @@ export function RideCard({ id, origin, destination, departureAt, arrivalAt, seat
               className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 shadow-md shadow-primary/20 whitespace-nowrap shrink-0"
               onClick={e => {
                 e.stopPropagation();
-                navigate({ to: "/rides/$rideId", params: { rideId: id } });
+                // ✅ FIX: Button click par bhi pass kar rahe hain
+                navigate({ 
+                  to: "/rides/$rideId", 
+                  params: { rideId: id },
+                  search: pickupPoint ? { pickup: pickupPoint } : undefined as any 
+                });
               }}
             >
               View ride

@@ -13,23 +13,24 @@ const PAYOUT_DELAY_HOURS = 3; // 3 hours delay for driver payout
  * @param {number} baseFare - Base fare set by driver (without fees)
  */
 const calculatePaymentAmounts = (baseFare) => {
-  // Calculate as per formula: base + 5% platform fee + 9.52% GST on (base + fee)
+  // Platform fee is 5% of base fare
   const platformFee = baseFare * 0.05; // 5%
-  const afterFee = baseFare + platformFee;
-  const gst = afterFee * 0.0952; // 9.52% on (base + platform fee)
-  const totalFare = afterFee + gst;
-
-  // Upfront is only GST amount
-  const upfrontAmount = Math.round(gst);
-  // Remaining is base + platform fee
-  const remainingAmount = Math.round(afterFee);
+  
+  // Total fare is base + platform fee (no GST for passenger)
+  const totalFare = baseFare + platformFee;
+  
+  // Upfront payment is 9.52% of total fare
+  const upfrontAmount = Math.round(totalFare * 0.0952);
+  
+  // Remaining payment is total fare minus upfront
+  const remainingAmount = Math.round(totalFare - upfrontAmount);
+  
   // Driver receives full remaining amount (no commission deduction)
   const driverEarning = remainingAmount;
 
   return {
     baseFare,
     platformFee,
-    gst,
     totalFare,
     upfrontAmount,
     remainingAmount,

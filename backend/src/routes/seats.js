@@ -36,8 +36,11 @@ router.get('/rides/:rideId/seats', protect, async (req, res) => {
     const seatsWithPassengers = await Promise.all(
       seats.map(async (seat) => {
         const seatObj = seat.toObject();
-        if (seat.status === 'booked' && seat.bookedBy) {
-          const passenger = await User.findById(seat.bookedBy)
+        // 🚨 [FIXED]: Checking both 'passenger' and 'bookedBy' for complete compatibility
+        const passengerId = seat.passenger || seat.bookedBy; 
+        
+        if (seat.status === 'booked' && passengerId) {
+          const passenger = await User.findById(passengerId)
             .select('fullName phone avatarUrl');
           seatObj.passenger = passenger;
         }
@@ -192,8 +195,11 @@ router.get('/rides/:rideId/seats/passengers', protect, async (req, res) => {
     const seatsWithPassengers = await Promise.all(
       seats.map(async (seat) => {
         const seatObj = seat.toObject();
-        if (seat.status === 'booked' && seat.bookedBy) {
-          const passenger = await User.findById(seat.bookedBy)
+        // 🚨 [FIXED]: Checking both 'passenger' and 'bookedBy' for complete compatibility
+        const passengerId = seat.passenger || seat.bookedBy;
+
+        if (seat.status === 'booked' && passengerId) {
+          const passenger = await User.findById(passengerId)
             .select('fullName phone avatarUrl');
           seatObj.passenger = passenger;
         }

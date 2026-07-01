@@ -22,6 +22,25 @@ const bookingSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // ✅ NAYA FEATURE: Pickup Point add kar diya (Optional)
+    pickupPoint: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    // 🚨 YAHAN ADD KIYE HAIN HUMARE NAYE FIELDS 🚨
+    deviationCharge: {
+      type: Number,
+      default: 0,
+    },
+    driverCashFare: {
+      type: Number,
+      default: 0,
+    },
+    isPaymentConfirmedByDriver: {
+      type: Boolean,
+      default: false,
+    },
     status: {
       type: String,
       enum: ["pending_payment", "confirmed", "cancelled"],

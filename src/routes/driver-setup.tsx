@@ -183,7 +183,7 @@ function DriverSetupPage() {
     }
   };
 
-  const onSubmit = async (values: FormValues) => {
+const onSubmit = async (values: FormValues) => {
     try {
       // Upload all documents
       const [
@@ -262,8 +262,11 @@ function DriverSetupPage() {
       if (aadharCardFront || aadharCardBack) payload.aadharCard = aadharCard;
       if (panCardFront) payload.panCard = panCard;
       if (rcFront) payload.rc = rc;
-      if (insurance) payload.insurance = insuranceData;
-      if (pollution) payload.pollution = pollutionData;
+      
+      // ✅ FIX: Changed keys to match backend schema exactly
+      if (insurance) payload.insuranceCertificate = insuranceData;
+      if (pollution) payload.pollutionCertificate = pollutionData;
+      
       if (vehicleImage) payload.vehicleImage = vehicleImageData;
 
       const data = await api.put<{ status: string; user: ApiUser; requiresApproval: boolean }>("/api/profile/driver", payload);
@@ -428,7 +431,7 @@ function DriverSetupPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[4,5,6,7,8,9,10,11,12,13,14,15].map(n => (
+                      {[4,5,6,7,8,9,10,11,12].map(n => (
                         <SelectItem key={n} value={String(n)}>{n} seat{n > 1 ? 's' : ''}</SelectItem>
                       ))}
                     </SelectContent>

@@ -17,6 +17,19 @@ const rideSchema = new mongoose.Schema(
       required: [true, "Destination is required"],
       trim: true,
     },
+    // 🚨 [ADDED]: Future-proofing for exact map pins
+    originCoords: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
+    destinationCoords: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
+    pickupPoints: {
+      type: [String],
+      default: [],
+    },
     departureAt: {
       type: Date,
       required: [true, "Departure date/time is required"],
@@ -28,14 +41,15 @@ const rideSchema = new mongoose.Schema(
     seatsTotal: {
       type: Number,
       required: true,
-      min: 5,
-      max: 15,
+      min: 1,
+      max: 12,
       default: 5,
     },
     seatsAvailable: {
       type: Number,
       required: true,
       min: 0,
+      max: 12,
     },
     pricePerSeat: {
       type: Number,
@@ -134,7 +148,7 @@ const rideSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    // Route deviation and extra charges
+    // Route deviation and extra charges (Legacy - Now handled in Bookings)
     deviationDistance: {
       type: Number,
       default: 0,

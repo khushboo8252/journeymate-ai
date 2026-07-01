@@ -18,6 +18,7 @@ import {
   Shield,
   MapPin,
   Clock,
+  CheckCircle, // 🚨 ADDED
 } from "lucide-react";
 import { DriverLocationMap } from "@/components/maps/DriverLocationMap";
 import { LocationTracker } from "@/components/driver/LocationTracker";
@@ -29,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import type { ApiRide, ApiUser } from "@/lib/api";
@@ -58,8 +61,22 @@ function RideDetailPage() {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
-  const [seatsToBook, setSeatsToBook] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState<"online" | "cash">("online");
+  
+  // 🚨 [NEW STATES]: Booking memory & Payment notification state
+  const [myBooking, setMyBooking] = useState<any>(null);
+  const [bookedSeatsCount, setBookedSeatsCount] = useState(0); 
+  const [paymentNotified, setPaymentNotified] = useState(false);
+
+  // Pickup Point State
+  const searchParams = Route.useSearch() as any;
+  const [pickupPoint, setPickupPoint] = useState(searchParams?.pickup || "");
+
+  // Interactive Passenger Seat Selection States
+  const [seatsList, setSeatsList] = useState<any[]>([]);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [loadingSeats, setLoadingSeats] = useState(false);
+
+  const seatsToBook = selectedSeats.length;
 
   // Live location state
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -71,19 +88,18 @@ function RideDetailPage() {
 
   useEffect(() => {
     fetchRide();
+    fetchPassengerSeats();
   }, [rideId]);
 
   useEffect(() => {
     if (user && ride) checkExistingBooking();
   }, [user, ride]);
 
-  // Listen for location updates via WebSocket
   useEffect(() => {
     if (!ride) return;
 
     const socket = getSocket();
 
-    // Listen for driver location updates
     socket.on("driver_location_updated", (data: any) => {
       if (data.rideId === ride._id && data.currentLocation) {
         setDriverLocation({
@@ -94,33 +110,38 @@ function RideDetailPage() {
       }
     });
 
-    // Listen for location tracking started
+    socket.on("seat_locked", () => fetchPassengerSeats());
+    socket.on("seat_released", () => fetchPassengerSeats());
+
     socket.on("location_tracking_started", (data: any) => {
       if (data.rideId === ride._id) {
         setIsTrackingLocation(true);
       }
     });
 
-    // Listen for location tracking stopped
     socket.on("location_tracking_stopped", (data: any) => {
       if (data.rideId === ride._id) {
         setIsTrackingLocation(false);
       }
     });
 
-    // Listen for ride completion confirmation events
+    // 🚨 [MODIFIED]: Ab driver action par booking DB dobara check karega
     socket.on("driver_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && !isDriver) {
         playAlertSound();
-        toast.success("Driver has confirmed ride completion. Please confirm to complete the ride.");
         fetchRide();
+        checkExistingBooking(); // Refresh to check if payment was accepted
       }
+    });
+    
+    // Generic re-fetch trigger in case backend sends custom event
+    socket.on("payment_confirmed", () => {
+      checkExistingBooking();
     });
 
     socket.on("passenger_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && isDriver) {
         playAlertSound();
-        toast.success("Passenger has confirmed ride completion.");
         fetchRide();
       }
     });
@@ -130,10 +151,10 @@ function RideDetailPage() {
         playAlertSound();
         toast.success("Ride completed successfully!");
         fetchRide();
+        checkExistingBooking();
       }
     });
 
-    // Booking transfer notifications
     socket.on("booking_transferred", (data: any) => {
       if (data.originalRideId === ride._id && !isDriver) {
         toast.success(data.message || "Your booking has been transferred to driver's next ride.");
@@ -141,8 +162,6 @@ function RideDetailPage() {
       }
     });
 
-
-    // Initialize location from ride data
     if (ride.currentLocation?.latitude && ride.currentLocation?.longitude) {
       setDriverLocation({
         latitude: ride.currentLocation.latitude,
@@ -153,16 +172,18 @@ function RideDetailPage() {
 
     return () => {
       socket.off("driver_location_updated");
+      socket.off("seat_locked");
+      socket.off("seat_released");
       socket.off("location_tracking_started");
       socket.off("location_tracking_stopped");
       socket.off("driver_confirmed_completion");
+      socket.off("payment_confirmed");
       socket.off("passenger_confirmed_completion");
       socket.off("ride_completed");
       socket.off("booking_transferred");
     };
   }, [ride]);
 
-  // Initialize audio context on user interaction
   useEffect(() => {
     const initAudio = () => {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -190,53 +211,85 @@ function RideDetailPage() {
     setLoading(false);
   };
 
-  const checkExistingBooking = async () => {
-    if (!user || !ride) return;
+  const fetchPassengerSeats = async () => {
     try {
-      const bookings = await api.get<{ _id: string; status: string }[]>("/api/bookings/my");
-      const found = bookings.some((b: { _id: string; status: string } & { rideId?: string }) =>
-        (typeof b.rideId === "string" ? b.rideId : (b.rideId as unknown as ApiRide)?._id) === ride._id &&
-        b.status === "confirmed"
-      );
-      setAlreadyBooked(found);
-    } catch {
-      setAlreadyBooked(false);
+      setLoadingSeats(true);
+      const res = await api.get<any>(`/api/rides/${rideId}/seats`);
+      const rawSeats = Array.isArray(res) ? res : res.seats || [];
+      // Strictly ignore A1 (driver)
+      setSeatsList(rawSeats.filter((s: any) => s.seatNumber !== "A1" && s.type !== "driver")); 
+    } catch (err) {
+      console.error("Failed to load seats", err);
+    } finally {
+      setLoadingSeats(false);
     }
   };
 
-  // Calculate final price for passengers: base + 5% platform fee + 9.52% GST
-  const calculateFinalPrice = (basePrice: number): number => {
-    const platformFee = basePrice * 0.05; // 5%
-    const afterFee = basePrice + platformFee;
-    const gst = afterFee * 0.0952; // 9.52%
-    return afterFee + gst;
+  // 🚨 [MODIFIED]: Ab ye function poori booking object store karega
+  const checkExistingBooking = async () => {
+    if (!user || !ride) return;
+    try {
+      const bookings = await api.get<any[]>("/api/bookings/my");
+      const found = bookings.find((b: any) =>
+        (typeof b.rideId === "string" ? b.rideId : b.rideId?._id) === ride._id &&
+        b.status === "confirmed"
+      );
+      if (found) {
+        setAlreadyBooked(true);
+        setBookedSeatsCount(found.seats || 1);
+        setMyBooking(found); // DB se payment status yahan mil jayega
+      } else {
+        setAlreadyBooked(false);
+        setMyBooking(null);
+      }
+    } catch {
+      setAlreadyBooked(false);
+      setMyBooking(null);
+    }
+  };
+
+  const toggleSeatSelection = (seatNumber: string) => {
+    if (seatNumber === "A1") return; // Explicit driver safety check
+
+    let updatedSeats: string[];
+    if (selectedSeats.includes(seatNumber)) {
+      updatedSeats = selectedSeats.filter(s => s !== seatNumber);
+    } else {
+      updatedSeats = [...selectedSeats, seatNumber];
+    }
+    setSelectedSeats(updatedSeats);
   };
 
   const bookRide = async () => {
-    if (!user) { navigate({ to: "/auth" }); return; }
+    if (!user) { navigate({ to: "/auth", search: { tab: "signin" } }); return; }
     if (!ride) return;
-    if (seatsToBook < 1) { toast.error("Please select at least 1 seat"); return; }
+    if (selectedSeats.length === 0) { toast.error("Please select at least 1 seat"); return; }
+    
     setBooking(true);
     try {
-      // Create booking (will return payment order)
+      await api.post(`/api/rides/${ride._id}/seats/lock`, { seatNumbers: selectedSeats });
+
       const bookingResponse = await api.post<{
         booking: { _id: string };
         paymentOrder?: { keyId: string; amount: number; currency: string; orderId: string };
         requiresPayment: boolean;
         upfrontAmount?: number;
-      }>("/api/bookings", { rideId: ride._id, seats: seatsToBook });
+      }>("/api/bookings", { 
+        rideId: ride._id, 
+        seats: selectedSeats.length, 
+        seatNumbers: selectedSeats,
+        pickupPoint: pickupPoint.trim() || undefined
+      });
 
       if (bookingResponse.requiresPayment && bookingResponse.paymentOrder) {
         const paymentOrder = bookingResponse.paymentOrder;
 
-        // Check if payment system is configured
         if (!paymentOrder.keyId || paymentOrder.keyId === "your_razorpay_key_id") {
           toast.error("Payment system not configured. Please contact admin.");
           setBooking(false);
           return;
         }
 
-        // Load Razorpay script dynamically
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         script.async = true;
@@ -246,19 +299,23 @@ function RideDetailPage() {
             amount: paymentOrder.amount * 100,
             currency: paymentOrder.currency,
             name: "Ukyro",
-            description: `Booking for ${seatsToBook} seat(s)`,
+            description: `Booking for seats: ${selectedSeats.join(", ")}`,
             order_id: paymentOrder.orderId,
             handler: async function (response: any) {
               try {
-                // Verify payment and confirm booking
                 await api.post("/api/bookings/confirm", {
                   bookingId: bookingResponse.booking._id,
                   paymentId: response.razorpay_payment_id,
                   signature: response.razorpay_signature,
                 });
-                toast.success(`${seatsToBook} seat${seatsToBook > 1 ? "s" : ""} booked! Have a great journey.`);
+                toast.success(`Seats ${selectedSeats.join(", ")} booked successfully!`);
                 setAlreadyBooked(true);
+                setBookedSeatsCount(selectedSeats.length); 
+                setSelectedSeats([]);
+                setPickupPoint(""); 
                 fetchRide();
+                fetchPassengerSeats();
+                checkExistingBooking(); // Refresh state
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
               }
@@ -272,8 +329,9 @@ function RideDetailPage() {
               color: "#6366f1",
             },
             modal: {
-              ondismiss: function() {
-                toast.error("Payment cancelled");
+              ondismiss: async function() {
+                await api.post(`/api/rides/${ride._id}/seats/release`, { seatNumbers: selectedSeats });
+                toast.error("Payment cancelled. Seats released.");
                 setBooking(false);
               },
             },
@@ -287,14 +345,19 @@ function RideDetailPage() {
           }
         };
         script.onerror = () => {
-          toast.error("Failed to load payment gateway. Please check your internet connection.");
+          toast.error("Failed to load payment gateway.");
           setBooking(false);
         };
         document.body.appendChild(script);
       } else {
-        toast.success(`${seatsToBook} seat${seatsToBook > 1 ? "s" : ""} booked! Have a great journey.`);
+        toast.success(`Seats ${selectedSeats.join(", ")} booked! Have a great journey.`);
         setAlreadyBooked(true);
+        setBookedSeatsCount(selectedSeats.length); 
+        setSelectedSeats([]);
+        setPickupPoint(""); 
         fetchRide();
+        fetchPassengerSeats();
+        checkExistingBooking();
         setBooking(false);
       }
     } catch (err) {
@@ -346,6 +409,16 @@ function RideDetailPage() {
     return h === 0 ? `${min}min` : min === 0 ? `${h}hr` : `${h}hr ${min}min`;
   };
 
+  const seatRows = seatsList.reduce((acc, seat) => {
+    if (!acc[seat.row]) acc[seat.row] = [];
+    if (!acc[seat.row].some((s: any) => s.seatNumber === seat.seatNumber)) acc[seat.row].push(seat);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  if (!seatRows["A"]) seatRows["A"] = [];
+  
+  const sortedRowKeys = Object.keys(seatRows).sort();
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -379,7 +452,7 @@ function RideDetailPage() {
             <div className="text-right">
               <div className="text-2xl sm:text-3xl font-bold text-primary">
                 <IndianRupee className="h-5 w-5 inline" />
-                {ride.pricePerSeat}
+                {Math.round(ride.pricePerSeat * 1.05)}
               </div>
               <div className="text-xs text-muted-foreground">per seat</div>
             </div>
@@ -392,19 +465,16 @@ function RideDetailPage() {
             {/* ═══ LEFT COLUMN ═══ */}
             <div className="flex-1 min-w-0 space-y-4">
 
-              {/* ── Route timeline card ── */}
+              {/* Route timeline card */}
               <div className="glass rounded-2xl p-4 sm:p-6">
                 <div className="flex gap-4">
-                  {/* Timeline spine */}
                   <div className="flex flex-col items-center pt-1">
                     <div className="h-3 w-3 rounded-full bg-primary shadow-lg shadow-primary/50" />
                     <div className="flex-1 w-0.5 bg-gradient-to-b from-primary to-primary/30 my-2" />
                     <div className="h-3 w-3 rounded-full bg-primary/50 border-2 border-primary" />
                   </div>
 
-                  {/* Stops */}
                   <div className="flex-1 space-y-4">
-                    {/* Departure stop */}
                     <div>
                       <div className="flex items-baseline gap-3">
                         <span className="text-lg sm:text-xl font-bold tabular-nums w-16 shrink-0">{format(departure, "HH:mm")}</span>
@@ -412,13 +482,12 @@ function RideDetailPage() {
                           <span className="font-semibold text-base sm:text-lg">{ride.origin}</span>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                             <MapPin className="h-3 w-3" />
-                            Pickup point
+                            Origin City
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Duration in between */}
                     {durationMins !== null && (
                       <div className="flex items-center gap-3 py-1">
                         <span className="text-sm font-medium text-primary w-16 shrink-0">{formatDur(durationMins)}</span>
@@ -427,7 +496,6 @@ function RideDetailPage() {
                       </div>
                     )}
 
-                    {/* Arrival stop */}
                     <div>
                       <div className="flex items-baseline gap-3">
                         <span className="text-lg sm:text-xl font-bold tabular-nums w-16 shrink-0">
@@ -437,7 +505,7 @@ function RideDetailPage() {
                           <span className="font-semibold text-base sm:text-lg">{ride.destination}</span>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                             <MapPin className="h-3 w-3" />
-                            Drop-off point
+                            Drop-off City
                           </div>
                         </div>
                       </div>
@@ -445,7 +513,6 @@ function RideDetailPage() {
                   </div>
                 </div>
 
-                {/* Seats + status row */}
                 <div className="flex items-center gap-4 mt-5 pt-4 border-t border-border/30">
                   <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Users className="h-4 w-4" />{ride.seatsAvailable} {t("ride_details.seats_available")}
@@ -459,9 +526,8 @@ function RideDetailPage() {
                 </div>
               </div>
 
-              {/* ── Driver card ── */}
+              {/* Driver card */}
               <div className="glass rounded-2xl overflow-hidden">
-                {/* Driver header with rating */}
                 <div className="p-4 sm:p-5">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -488,13 +554,11 @@ function RideDetailPage() {
                     </Badge>
                   </div>
 
-                  {/* Vehicle info */}
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                     <Car className="h-4 w-4" />
                     <span>{ride.vehicleType || "Sedan"} • {ride.seatsAvailable} seat{ride.seatsAvailable !== 1 ? 's' : ''} available</span>
                   </div>
 
-                  {/* Instant booking badge */}
                   <div className="flex items-center gap-2 text-sm text-primary">
                     <Zap className="h-4 w-4" />
                     <span>Instant confirmation</span>
@@ -503,16 +567,13 @@ function RideDetailPage() {
 
                 <Separator />
 
-                {/* Driver details list */}
                 <div className="p-4 sm:p-5 space-y-3">
-                  {/* Location tracking controls for driver */}
                   {isDriver && ride.status === "active" && (
                     <div className="pt-3 border-t border-border/30">
                       <LocationTracker rideId={ride._id} />
                     </div>
                   )}
 
-                  {/* Notes */}
                   {ride.description && (
                     <div className="flex items-start gap-3 text-sm">
                       <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -520,7 +581,6 @@ function RideDetailPage() {
                     </div>
                   )}
 
-                  {/* Phone (shown only if you're the booker or driver) */}
                   {(isDriver || alreadyBooked) && driver?.phone && (
                     <div className="flex items-center gap-3 text-sm">
                       <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -529,22 +589,17 @@ function RideDetailPage() {
                   )}
                 </div>
 
-                {/* Contact button */}
                 {!isDriver && (
                   <div className="px-5 pb-5">
                     <div className="flex gap-2">
-                      <Button variant="outline" className="flex items-center gap-2 rounded-full border-primary/40 text-primary hover:bg-primary/5 flex-1 h-10 text-sm font-medium">
-                        <MessageSquare className="h-4 w-4" />{t("ride_details.contact")} {driver?.fullName?.split(" ")[0] ?? "Driver"}
-                      </Button>
                       {driver?.phone && (
                         <div className="relative group">
                           <Button
                             className="flex items-center gap-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 h-10 px-5 font-medium shadow-lg shadow-green-500/30"
                             onClick={() => window.location.href = `tel:${driver.phone}`}
                           >
-                            <Phone className="h-4 w-4" />Call
+                            <Phone className="h-4 w-4" /> Contact {driver.fullName?.split(" ")[0] ?? "Driver"}
                           </Button>
-                          {/* Phone number tooltip on hover */}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                             {driver.phone}
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
@@ -556,7 +611,7 @@ function RideDetailPage() {
                 )}
               </div>
 
-              {/* ── Trust Section ── */}
+              {/* Trust Section */}
               <div className="glass rounded-2xl p-4 sm:p-5">
                 <h3 className="font-semibold text-base mb-4">Trust & Reviews</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -629,18 +684,16 @@ function RideDetailPage() {
                   </div>
                 </div>
               )}
-
             </div>
 
-            {/* ═══ RIGHT COLUMN — sticky booking panel ═══ */}
+            {/* ═══ RIGHT COLUMN — STICKY BOOKING PANEL ═══ */}
             <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-24">
               <div className="glass rounded-2xl overflow-hidden border-primary/20">
 
-                {/* Price header */}
                 <div className="bg-gradient-to-r from-primary/10 to-accent/10 p-5">
                   <div className="flex items-baseline gap-1">
                     <IndianRupee className="h-6 w-6 text-primary" />
-                    <span className="text-3xl font-bold text-primary">{ride.pricePerSeat}</span>
+                    <span className="text-3xl font-bold text-primary">{Math.round(ride.pricePerSeat * 1.05)}</span>
                     <span className="text-sm text-muted-foreground">/ seat</span>
                   </div>
                   <div className="flex items-center gap-2 mt-2 text-sm">
@@ -651,13 +704,12 @@ function RideDetailPage() {
 
                 <Separator />
 
-                {/* Booking action */}
                 <div className="p-5 space-y-4">
                   {!user && (
                     <div className="text-center space-y-3">
                       <Lock className="h-7 w-7 text-muted-foreground/40 mx-auto" />
                       <p className="text-sm text-muted-foreground">{t("ride_details.sign_in_to_book")}</p>
-                      <Link to="/auth">
+                      <Link to="/auth" search={{ tab: "signin" }}>
                         <Button className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 rounded-full font-semibold">
                           {t("auth.signin")}
                         </Button>
@@ -671,67 +723,144 @@ function RideDetailPage() {
 
                   {canBook && (
                     <>
-                      {/* Seat count selector */}
+                      {/* DYNAMIC INTERACTIVE INDIAN SEAT PICKER GRID */}
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Select seats</span>
-                          <div className="flex items-center gap-3">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSeatsToBook(Math.max(1, seatsToBook - 1))}
-                              disabled={seatsToBook <= 1}
-                              className="h-8 w-8 rounded-full"
-                            >
-                              -
-                            </Button>
-                            <span className="font-semibold text-lg w-8 text-center">{seatsToBook}</span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSeatsToBook(Math.min(ride.seatsAvailable, seatsToBook + 1))}
-                              disabled={seatsToBook >= ride.seatsAvailable}
-                              className="h-8 w-8 rounded-full"
-                            >
-                              +
-                            </Button>
+                        <div className="rounded-xl border border-border bg-muted/20 p-3">
+                          <p className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-3 text-center">
+                            Select Seat Layout
+                          </p>
+                          
+                          {loadingSeats ? (
+                            <div className="flex justify-center py-6">
+                              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2.5 items-center">
+                              {sortedRowKeys.map((rowKey) => {
+                                let seatsInRow = [...seatRows[rowKey]];
+                                
+                                if (rowKey === "A") {
+                                  return (
+                                    <div key={rowKey} className="flex items-center gap-2 justify-center w-full">
+                                      {seatsInRow.find(s => s.seatNumber === "A2") ? (
+                                        (() => {
+                                          const seat = seatsInRow.find(s => s.seatNumber === "A2");
+                                          const isBooked = seat.status === "booked";
+                                          const isLocked = seat.status === "locked";
+                                          const isSelected = selectedSeats.includes(seat.seatNumber);
+                                          return (
+                                            <button
+                                              key="A2"
+                                              type="button"
+                                              disabled={isBooked || isLocked}
+                                              onClick={() => toggleSeatSelection("A2")}
+                                              className={cn(
+                                                "w-11 h-12 rounded-t-lg font-bold text-xs transition-all flex flex-col items-center justify-center border relative shadow-sm",
+                                                isBooked && "bg-muted text-muted-foreground/30 border-muted-foreground/5 cursor-not-allowed opacity-40",
+                                                isLocked && "bg-amber-500/10 text-amber-600/50 border-amber-500/20 cursor-not-allowed",
+                                                !isBooked && !isLocked && !isSelected && "bg-background border-border hover:border-primary text-foreground cursor-pointer",
+                                                isSelected && "bg-primary text-primary-foreground border-primary scale-105 shadow-md shadow-primary/20"
+                                              )}
+                                            >
+                                              <span>A2</span>
+                                              <div className={cn("absolute bottom-0 h-1 w-full rounded-b-sm", isSelected ? "bg-white/20" : "bg-muted-foreground/5")} />
+                                            </button>
+                                          );
+                                        })()
+                                      ) : null}
+
+                                      <div 
+                                        key="driver-steering-box" 
+                                        className="w-11 h-12 rounded-t-lg bg-primary/5 border border-dashed border-primary/30 flex flex-col items-center justify-center text-primary/60 select-none shadow-sm"
+                                      >
+                                        <span className="text-[8px] font-bold">A1</span>
+                                        <span className="text-[7px] font-semibold tracking-tighter">Driver</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                seatsInRow.sort((a, b) => a.position - b.position);
+
+                                return (
+                                  <div key={rowKey} className="flex items-center gap-2 justify-center w-full">
+                                    {seatsInRow.map((seat) => {
+                                      const isBooked = seat.status === "booked";
+                                      const isLocked = seat.status === "locked";
+                                      const isSelected = selectedSeats.includes(seat.seatNumber);
+
+                                      return (
+                                        <button
+                                          key={seat.seatNumber}
+                                          type="button"
+                                          disabled={isBooked || isLocked}
+                                          onClick={() => toggleSeatSelection(seat.seatNumber)}
+                                          className={cn(
+                                            "w-11 h-12 rounded-t-lg font-bold text-xs transition-all flex flex-col items-center justify-center border relative shadow-sm",
+                                            isBooked && "bg-muted text-muted-foreground/30 border-muted-foreground/5 cursor-not-allowed opacity-40",
+                                            isLocked && "bg-amber-500/10 text-amber-600/50 border-amber-500/20 cursor-not-allowed",
+                                            !isBooked && !isLocked && !isSelected && "bg-background border-border hover:border-primary text-foreground cursor-pointer",
+                                            isSelected && "bg-primary text-primary-foreground border-primary scale-105 shadow-md shadow-primary/20"
+                                          )}
+                                        >
+                                          <span>{seat.seatNumber}</span>
+                                          <div className={cn(
+                                            "absolute bottom-0 h-1 w-full rounded-b-sm",
+                                            isSelected ? "bg-white/20" : "bg-muted-foreground/5"
+                                          )} />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex justify-between text-xs text-muted-foreground px-1">
+                          <span>Selected: <strong className="text-foreground">{selectedSeats.length > 0 ? selectedSeats.join(", ") : "None"}</strong></span>
+                          <span>Count: <strong className="text-foreground">{seatsToBook}</strong></span>
+                        </div>
+
+                        <div className="space-y-1.5 py-2 border-t border-border/30">
+                          <Label className="text-xs text-muted-foreground">Exact Pickup Point (Optional)</Label>
+                          <div className="relative">
+                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="e.g. City Mall, Gate 2"
+                              value={pickupPoint}
+                              onChange={(e) => setPickupPoint(e.target.value)}
+                              className="pl-9 h-10 text-sm"
+                            />
                           </div>
                         </div>
 
-                        {/* Price breakdown */}
-                        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Base fare</span>
-                            <span className="font-medium">₹{ride.pricePerSeat * seatsToBook}</span>
+                        {seatsToBook > 0 && (
+                          <div className="text-center bg-muted/20 border border-border/50 rounded-lg p-2 mb-2">
+                            <p className="text-xs text-muted-foreground">
+                              Online advance fee: <span className="font-semibold text-foreground">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)}</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              (Remaining <span className="font-semibold text-primary">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 - (ride.pricePerSeat * seatsToBook * 1.05 * 0.0952))}</span> to be paid to driver)
+                            </p>
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Platform fee (5%)</span>
-                            <span className="font-medium">₹{Math.round(ride.pricePerSeat * seatsToBook * 0.05)}</span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">GST (9.52%)</span>
-                            <span className="font-medium">₹{Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}</span>
-                          </div>
-                          <Separator className="my-2" />
-                          <div className="flex justify-between font-semibold">
-                            <span>Pay now (GST)</span>
-                            <span className="text-primary">₹{Math.round((ride.pricePerSeat * seatsToBook * 1.05) * 0.0952)}</span>
-                          </div>
-                        </div>
+                        )}
+
+                        <Button
+                          onClick={bookRide}
+                          disabled={booking || seatsToBook === 0}
+                          className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-12 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
+                        >
+                          {booking ? (
+                            <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                          ) : seatsToBook === 0 ? (
+                            <>Select seats to book</>
+                          ) : (
+                            <>Book {seatsToBook} seat{seatsToBook > 1 ? 's' : ''} at ₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05 * 0.0952)}</>
+                          )}
+                        </Button>
                       </div>
-
-                      {/* Book button */}
-                      <Button
-                        onClick={bookRide}
-                        disabled={booking}
-                        className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 font-semibold h-12 rounded-full text-base shadow-lg shadow-primary/30 disabled:opacity-40"
-                      >
-                        {booking
-                          ? <Loader2 className="h-5 w-5 animate-spin" />
-                          : <><Zap className="h-5 w-5 mr-2" />Book {seatsToBook} seat{seatsToBook > 1 ? 's' : ''}</>}
-                      </Button>
                     </>
                   )}
 
@@ -739,109 +868,64 @@ function RideDetailPage() {
                     <p className="text-center text-sm text-muted-foreground py-2">{t("ride_details.fully_booked")}</p>
                   )}
 
-                  {/* Ride completion confirmation for passengers */}
+                  {/* 🚨 [MODIFIED]: New Passenger Payment Flow 🚨 */}
                   {alreadyBooked && ride.status === "active" && (
-                    <div className="space-y-3 pt-3 border-t border-border/30">
-                      <div className="text-center space-y-2">
-                        {ride.confirmByDriver && !ride.confirmByPassenger && (
-                          <p className="text-sm text-green-600 font-medium">{t("ride_details.driver_confirmed")}</p>
-                        )}
-                        {!ride.confirmByDriver && ride.confirmByPassenger && (
-                          <p className="text-sm text-amber-600 font-medium">{t("ride_details.waiting_driver")}</p>
-                        )}
-                        {ride.confirmByDriver && ride.confirmByPassenger && (
-                          <p className="text-sm text-green-600 font-medium">{t("ride_details.ride_completed")}</p>
-                        )}
-                        {!ride.confirmByDriver && !ride.confirmByPassenger && (
-                          <p className="text-sm text-muted-foreground">{t("ride_details.confirm_completion")}</p>
-                        )}
-                      </div>
-                      {!ride.confirmByPassenger && (
+                    <div className="space-y-3 pt-4 border-t border-border/30">
+                      
+                      {/* State 3: Payment Confirmed by Driver */}
+                      {myBooking?.isPaymentConfirmedByDriver ? (
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
+                          <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                          <p className="text-sm text-green-600 font-bold">Payment Confirmed!</p>
+                          <p className="text-xs text-green-600/80 mt-1">The driver has successfully received your payment.</p>
+                        </div>
+                      ) 
+                      
+                      /* State 2: Passenger clicked button, waiting for driver */
+                      : paymentNotified ? (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
+                          <Loader2 className="h-6 w-6 animate-spin text-amber-500 mx-auto mb-2" />
+                          <p className="text-sm text-amber-600 font-medium">Waiting for driver to confirm...</p>
+                          <p className="text-xs text-amber-600/80 mt-1">Please ask the driver to check their dashboard to accept your payment.</p>
+                        </div>
+                      ) 
+                      
+                      /* State 1: Initial State to pay driver */
+                      : (
                         <div className="space-y-3">
-                          <div className="bg-primary/10 rounded-lg p-3 text-center">
-                            <p className="text-sm text-muted-foreground">Remaining payment</p>
-                            <p className="text-xl font-bold">₹{Math.round(ride.pricePerSeat * seatsToBook * 1.05)}</p>
+                          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-center">
+                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Pay to driver</p>
+                            <p className="text-2xl font-bold text-foreground">
+                              ₹{Math.round(ride.pricePerSeat * bookedSeatsCount * 1.05 - (ride.pricePerSeat * bookedSeatsCount * 1.05 * 0.0952))}
+                            </p>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => setPaymentMethod("online")}
-                              variant={paymentMethod === "online" ? "default" : "outline"}
-                              className="flex-1"
-                            >
-                              <IndianRupee className="h-4 w-4 mr-2" />Online
-                            </Button>
-                            <Button
-                              onClick={() => setPaymentMethod("cash")}
-                              variant={paymentMethod === "cash" ? "default" : "outline"}
-                              className="flex-1"
-                            >
-                              Cash
-                            </Button>
-                          </div>
+                          
                           <Button
                             onClick={async () => {
                               try {
-                                // First confirm completion
-                                await api.patch(`/api/rides/${rideId}/confirm/passenger`);
-                                
-                                if (paymentMethod === "online") {
-                                  // Then trigger remaining payment
-                                  const paymentResponse = await api.post<{
-                                    orderId: string;
-                                    amount: number;
-                                    currency: string;
-                                    keyId: string;
-                                  }>(`/api/rides/${rideId}/remaining-payment`, {});
-                                  
-                                  // Open Razorpay for remaining payment
-                                  const options = {
-                                    key: paymentResponse.keyId,
-                                    amount: paymentResponse.amount,
-                                    currency: paymentResponse.currency,
-                                    name: "Ukyro",
-                                    description: "Remaining payment for ride",
-                                    order_id: paymentResponse.orderId,
-                                    handler: async function (response: any) {
-                                      try {
-                                        await api.post(`/api/rides/${rideId}/remaining-payment/verify`, {
-                                          paymentId: response.razorpay_payment_id,
-                                          signature: response.razorpay_signature,
-                                        });
-                                        toast.success(t("ride_details.ride_completed"));
-                                        fetchRide();
-                                      } catch (err) {
-                                        toast.error(err instanceof Error ? err.message : "Payment verification failed");
-                                      }
-                                    },
-                                    modal: {
-                                      ondismiss: function() {
-                                        toast.error("Payment cancelled");
-                                        fetchRide();
-                                      },
-                                    },
-                                  };
-                                  try {
-                                    const rzp = new (window as any).Razorpay(options);
-                                    rzp.open();
-                                  } catch (err) {
-                                    toast.error("Failed to open payment gateway");
-                                  }
-                                } else {
-                                  // Cash payment - mark as completed without payment
-                                  await api.post(`/api/rides/${rideId}/remaining-payment/cash`, {});
-                                  toast.success(t("ride_details.ride_completed"));
-                                  fetchRide();
-                                }
+                                // Just emit socket event to notify driver without changing whole ride status
+                                const driverUserId = typeof ride?.driverId === "object" ? ride?.driverId?._id : ride?.driverId;
+                                const socket = getSocket();
+                                socket.emit('passenger_paid_driver', { 
+                                  rideId: rideId, 
+                                  driverId: driverUserId, 
+                                  amount: Math.round(ride.pricePerSeat * bookedSeatsCount * 1.05 - (ride.pricePerSeat * bookedSeatsCount * 1.05 * 0.0952)), 
+                                  passengerName: user?.fullName 
+                                });
+
+                                toast.success("Payment notification sent to driver.");
+                                setPaymentNotified(true); // Disable button & change UI instantly
                               } catch (err) {
-                                toast.error(err instanceof Error ? err.message : "Failed to confirm");
+                                toast.error("Failed to notify driver.");
                               }
                             }}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg shadow-green-600/30 h-12 rounded-xl"
                           >
-                            {t("ride_details.confirm_button")}
+                            I have paid the driver
                           </Button>
                         </div>
                       )}
+
                     </div>
                   )}
                 </div>

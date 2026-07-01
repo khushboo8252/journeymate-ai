@@ -6,7 +6,7 @@ const Seat = require("../models/Seat");
 const User = require("../models/User");
 const { protect, restrictTo } = require("../middleware/auth");
 const { createUpfrontPaymentOrder, processUpfrontPayment } = require("../services/paymentService");
-const { sendBookingNotificationEmail } = require("../utils/email");
+const { sendBookingNotificationEmail, sendPassengerBookingConfirmationEmail } = require("../utils/email");
 
 const router = express.Router();
 
@@ -47,7 +47,8 @@ router.post(
   protect,
   [
     body("rideId").notEmpty().withMessage("Ride ID is required"),
-    body("seats").isInt({ min: 1, max: 15 }).withMessage("Seats must be between 1 and 15"),
+    body("seats").isInt({ min: 1, max: 12 }).withMessage("Seats must be between 1 and 12"),
+    body("pickupPoint").optional().isString().trim(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -55,7 +56,8 @@ router.post(
       return res.status(400).json({ message: errors.array()[0].msg });
     }
 
-    const { rideId, seats } = req.body;
+    // 🚨 NAYA LOGIC: deviationCharge aur driverCashFare backend receive karega
+    const { rideId, seats, seatNumbers, pickupPoint, deviationCharge, driverCashFare } = req.body;
     const userId = req.user._id;
 
     try {
@@ -78,6 +80,10 @@ router.post(
         rideId,
         passengerId: userId,
         seats: seats,
+        seatNumbers: seatNumbers || [],
+        pickupPoint: pickupPoint || null, 
+        deviationCharge: deviationCharge || 0, // 🚨 SAVE EXTRA CHARGE
+        driverCashFare: driverCashFare || 0,   // 🚨 SAVE TOTAL CASH
         status: "pending_payment"
       });
 
@@ -137,17 +143,34 @@ router.post(
       ride.seatsAvailable = Math.max(0, ride.seatsAvailable - booking.seats);
       await ride.save();
 
+      // 🚨 [FIXED CODE]: Seats ko permanently BOOKED mark karna
+      if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+        // Agar array me numbers aaye hain
+        await Seat.updateMany(
+          { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
+          { $set: { status: "booked", passenger: userId } }
+        );
+      } else {
+        // Fallback: Agar kisi wajah se array empty hai, toh is ride ki jo bhi seats 'locked' hain, unhe booked kardo
+        await Seat.updateMany(
+          { rideId: booking.rideId, status: "locked" },
+          { $set: { status: "booked", passenger: userId } }
+        );
+      }
+
       // Get driver details for email notification
       const driver = await User.findById(ride.driverId);
       const passenger = await User.findById(userId);
 
       // Send email notification to driver
       if (driver && driver.email && passenger) {
-        const baseFare = ride.pricePerSeat * booking.seats;
-        const platformFee = baseFare * 0.05;
-        const afterFee = baseFare + platformFee;
-        const gst = afterFee * 0.0952;
-        const totalPrice = Math.round(baseFare + platformFee + gst);
+        const basePricePerSeat = ride.pricePerSeat;
+        const baseTotal = basePricePerSeat * booking.seats;
+        const platformFee = Math.round(baseTotal * 0.05);
+        const totalWithFee = baseTotal + platformFee;
+        const upfrontAmount = Math.round(totalWithFee * 0.0952);
+        const remainingAmount = Math.round(totalWithFee - upfrontAmount);
+        
         sendBookingNotificationEmail(
           driver.email,
           driver.fullName,
@@ -157,10 +180,25 @@ router.post(
           ride.destination,
           ride.departureAt,
           booking.seats,
-          totalPrice,
-          baseFare,
+          baseTotal,
           platformFee,
-          gst
+          upfrontAmount,
+          remainingAmount
+        );
+
+        // Send booking confirmation email to passenger
+        sendPassengerBookingConfirmationEmail(
+          passenger.email,
+          passenger.fullName,
+          driver.fullName,
+          driver.phone,
+          ride.origin,
+          ride.destination,
+          ride.departureAt,
+          booking.seats,
+          totalWithFee,
+          upfrontAmount,
+          remainingAmount
         );
       }
 
@@ -209,6 +247,19 @@ router.patch("/:id/cancel", protect, async (req, res) => {
       ride.seatsAvailable = Math.min(ride.seatsTotal, ride.seatsAvailable + booking.seats);
       await ride.save();
 
+      // Booking cancel hone par seats ko wapas AVAILABLE mark karna
+      if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+        await Seat.updateMany(
+          { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
+          { 
+            $set: { 
+              status: "available", 
+              passenger: null 
+            } 
+          }
+        );
+      }
+
       // Emit real-time events
       global.io.to(`user_${req.user._id}`).emit("booking_cancelled", booking);
       global.io.to(`driver_${ride.driverId}`).emit("booking_cancelled", booking);
@@ -219,6 +270,39 @@ router.patch("/:id/cancel", protect, async (req, res) => {
   } catch (err) {
     console.error("Cancel booking error:", err);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// 🚨 SECURED ROUTE: Driver confirms passenger payment
+router.patch("/:id/confirm-payment", protect, restrictTo("driver"), async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    // Fetch booking along with ride details to check driver ownership
+    const booking = await Booking.findById(bookingId).populate("rideId");
+    
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // Security Check: Make sure the person clicking is actually the driver of this ride
+    if (String(booking.rideId.driverId) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Unauthorized. Only the driver of this ride can confirm payment." });
+    }
+
+    // Update payment status
+    booking.isPaymentConfirmedByDriver = true; 
+    await booking.save();
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Payment confirmed successfully",
+      booking 
+    });
+
+  } catch (error) {
+    console.error("Error confirming payment:", error);
+    return res.status(500).json({ message: "Server error confirming payment" });
   }
 });
 

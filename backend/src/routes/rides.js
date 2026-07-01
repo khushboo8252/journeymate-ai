@@ -13,12 +13,13 @@ const router = express.Router();
 // GET /api/rides — search rides
 router.get("/", async (req, res) => {
   try {
-    const { from, to, date, seats = 1, sortBy = "departureAt" } = req.query;
+    const { from, to, pickup, date, seats = 1, sortBy = "departureAt" } = req.query;
 
     const filter = { status: "active", seatsAvailable: { $gte: Number(seats) } };
 
     if (from) filter.origin = { $regex: from, $options: "i" };
     if (to) filter.destination = { $regex: to, $options: "i" };
+    if (pickup) filter.pickupPoints = { $regex: pickup, $options: "i" };
 
     if (date) {
       const start = new Date(date);
@@ -27,6 +28,8 @@ router.get("/", async (req, res) => {
       end.setHours(23, 59, 59, 999);
       filter.departureAt = { $gte: start, $lte: end };
     }
+
+    console.log("Search rides filter:", filter);
 
     const sortMap = {
       departureAt: { departureAt: 1 },
@@ -40,8 +43,24 @@ router.get("/", async (req, res) => {
       .populate("driverId", "fullName avatarUrl")
       .lean();
 
+    console.log("Search rides result count:", rides.length);
+    if (rides.length > 0) {
+      console.log("Sample ride data:", rides[0]);
+    } else {
+      // If no results, show all active rides for debugging
+      const allActiveRides = await Ride.find({ status: "active" })
+        .select("origin destination seatsAvailable")
+        .lean();
+      console.log("All active rides for debug:", allActiveRides.map(r => ({
+        origin: r.origin,
+        destination: r.destination,
+        seatsAvailable: r.seatsAvailable
+      })));
+    }
+
     res.json(rides);
   } catch (err) {
+    console.error("Search rides error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -83,7 +102,8 @@ router.post(
     body("pricePerSeat").isFloat({ min: 1 }).withMessage("Price must be at least ₹1"),
     body("arrivalAt").optional().isISO8601().withMessage("Valid arrival date/time required"),
     body("vehicleType").optional().isIn(["hatchback", "sedan", "suv", "mpv", "van"]).withMessage("Invalid vehicle type"),
-    body("seatsTotal").optional().isInt({ min: 5, max: 15 }).withMessage("Total seats must be between 5 and 15"),
+    // [FIX]: Ab express-validator hardcoded checks ke bajay minimum boundary 1 secure rakhega
+    body("seatsTotal").optional().isInt({ min: 1, max: 12 }).withMessage("Total seats must be at least 1"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -94,16 +114,36 @@ router.post(
     const { origin, destination, departureAt, arrivalAt, pricePerSeat, description, vehicleType = "sedan", seatsTotal } = req.body;
 
     try {
-      // Check if driver is approved by admin
+      // Check driver details and approved stats
       const driver = await User.findById(req.user._id);
+      console.log("Driver status check:", {
+        driverId: req.user._id,
+        isApproved: driver?.isApproved,
+        isProfileComplete: driver?.isProfileComplete,
+        role: driver?.role,
+        vehicleSeats: driver?.vehicleSeats
+      });
+
       if (!driver.isApproved) {
         return res.status(403).json({
           message: "Your account is pending admin approval. You cannot publish rides until approved."
         });
       }
 
-      // Use user-selected seatsTotal or fallback to vehicle type default
+      // Fallback range handling configuration
       const finalSeatsTotal = seatsTotal ? Number(seatsTotal) : getTotalSeats(vehicleType);
+
+      // 🚨 [STRICT BUSINESS LOGIC VALIDATION CHECK]: 
+      if (finalSeatsTotal < 1) {
+        return res.status(400).json({ message: "Minimum 1 seat is required including the driver." });
+      }
+
+      const maxCarCapacity = driver.vehicleSeats ? Number(driver.vehicleSeats) : 5;
+      if (finalSeatsTotal > maxCarCapacity) {
+        return res.status(400).json({ 
+          message: `Aap apni gaadi ki registered capacity (${maxCarCapacity} seats) se zyada seats select nahi kar sakte.` 
+        });
+      }
 
       const ride = await Ride.create({
         driverId: req.user._id,
@@ -112,7 +152,7 @@ router.post(
         departureAt: new Date(departureAt),
         arrivalAt: arrivalAt ? new Date(arrivalAt) : null,
         seatsTotal: finalSeatsTotal,
-        seatsAvailable: finalSeatsTotal - 1, // Exclude driver seat from available seats
+        seatsAvailable: finalSeatsTotal, // All seats available for passengers
         pricePerSeat: Number(pricePerSeat),
         description: description || null,
         vehicleType,
@@ -120,8 +160,15 @@ router.post(
       });
 
       // Auto-generate seats for the ride based on user-selected total
-      const seatData = generateSeats(ride._id, vehicleType, finalSeatsTotal);
-      await Seat.insertMany(seatData);
+      try {
+        const seatData = generateSeats(ride._id, vehicleType, finalSeatsTotal);
+        await Seat.insertMany(seatData);
+      } catch (seatError) {
+        console.error("Seat generation error:", seatError);
+        // If seat generation fails, delete the ride to maintain consistency
+        await Ride.findByIdAndDelete(ride._id);
+        return res.status(500).json({ message: "Failed to generate seats. Please try again." });
+      }
 
       // Emit real-time event for new ride
       global.io.emit("ride_created", ride);
@@ -764,7 +811,7 @@ router.post("/:id/remaining-payment/cash", protect, async (req, res) => {
   }
 });
 
-module.exports = router;
+
 
 // POST /api/rides/:id/deviation-charge — Driver requests extra charge for route deviation
 router.post("/:id/deviation-charge", protect, restrictTo("driver"), async (req, res) => {
@@ -918,3 +965,5 @@ router.post("/:id/deviation-charge/reject", protect, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+module.exports = router;
