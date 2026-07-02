@@ -16,7 +16,10 @@ import {
   UserX,
   X,
   Eye,
-  FileText, // Naya icon add kiya
+  FileText,
+  Banknote, // 🚨 Naya add kiya for Settlements
+  CheckCircle,
+  Phone
 } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/site/Header";
@@ -33,6 +36,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { getSocket } from "@/lib/socket";
@@ -133,7 +137,6 @@ type Booking = {
   createdAt: string;
 };
 
-// Ek chota component documents ko card jaisa dikhane ke liye
 const DocumentLink = ({ href, label }: { href: string; label: string }) => (
   <a 
     href={href} 
@@ -164,17 +167,25 @@ function AdminDashboard() {
   })[]>([]);
   const [rides, setRides] = useState<Ride[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [activeTab, setActiveTab] = useState<"stats" | "drivers" | "passengers" | "rides" | "bookings">("stats");
+  const [settlements, setSettlements] = useState<any[]>([]); // 🚨 Naya Settlement State
+  
+  const [activeTab, setActiveTab] = useState<"stats" | "drivers" | "passengers" | "rides" | "bookings" | "settlements">("stats");
+  
   const [rejectionDialog, setRejectionDialog] = useState<{
     open: boolean;
     driverId: string | null;
     driverName: string | null;
     reason: string;
   }>({ open: false, driverId: null, driverName: null, reason: "" });
+  
   const [viewDialog, setViewDialog] = useState<{
     open: boolean;
     driver: User | null;
   }>({ open: false, driver: null });
+
+  // Settlement manual input state
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [upiRefs, setUpiRefs] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     const token = localStorage.getItem("kshira_admin_token");
@@ -184,18 +195,14 @@ function AdminDashboard() {
     }
     fetchData();
 
-    // Listen for driver profile updates via WebSocket
     const socket = getSocket();
     const handleDriverProfileUpdated = (data: any) => {
-      console.log("Driver profile updated:", data);
       toast.success("New driver profile submitted for approval");
-      fetchData(); // Refresh data to show the new profile
+      fetchData(); 
     };
-
     const handleUserProfileUpdated = (data: any) => {
-      console.log("User profile updated:", data);
       toast.success("User profile updated");
-      fetchData(); // Refresh data to show the updated profile
+      fetchData(); 
     };
 
     socket.on("driver_profile_updated", handleDriverProfileUpdated);
@@ -212,22 +219,13 @@ function AdminDashboard() {
     if (!token) return;
 
     try {
-      const [statsRes, usersRes, driversRes, ridesRes, bookingsRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/rides`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/bookings`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [statsRes, usersRes, driversRes, ridesRes, bookingsRes, settlementsRes] = await Promise.all([
+        fetch(`${import.meta.env.VITE_API_URL}/api/admin/stats`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/admin/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/admin/drivers`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/admin/rides`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/admin/bookings`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/admin/settlements`, { headers: { Authorization: `Bearer ${token}` } }), // 🚨
       ]);
 
       if (!statsRes.ok) throw new Error(t("admin.fetch_stats_failed"));
@@ -241,6 +239,10 @@ function AdminDashboard() {
       setDrivers(await driversRes.json());
       setRides(await ridesRes.json());
       setBookings(await bookingsRes.json());
+      
+      if (settlementsRes.ok) {
+        setSettlements(await settlementsRes.json());
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("admin.load_data_failed"));
     }
@@ -322,14 +324,10 @@ function AdminDashboard() {
       
       setViewDialog(prev => {
         if (prev.driver && prev.driver._id === driverId) {
-          return {
-            ...prev,
-            driver: { ...prev.driver, isBlocked: true }
-          };
+          return { ...prev, driver: { ...prev.driver, isBlocked: true } };
         }
         return prev;
       });
-
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("admin.block_driver_failed"));
@@ -352,14 +350,10 @@ function AdminDashboard() {
       
       setViewDialog(prev => {
         if (prev.driver && prev.driver._id === driverId) {
-          return {
-            ...prev,
-            driver: { ...prev.driver, isBlocked: false }
-          };
+          return { ...prev, driver: { ...prev.driver, isBlocked: false } };
         }
         return prev;
       });
-
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("admin.unblock_driver_failed"));
@@ -382,14 +376,10 @@ function AdminDashboard() {
       
       setViewDialog(prev => {
         if (prev.driver && prev.driver._id === driverId) {
-          return {
-            ...prev,
-            driver: { ...prev.driver, isApproved: true }
-          };
+          return { ...prev, driver: { ...prev.driver, isApproved: true } };
         }
         return prev;
       });
-
       fetchData(); 
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("admin.approve_driver_failed"));
@@ -397,12 +387,7 @@ function AdminDashboard() {
   };
 
   const handleRejectDriver = (driverId: string, driverName: string) => {
-    setRejectionDialog({
-      open: true,
-      driverId,
-      driverName,
-      reason: "",
-    });
+    setRejectionDialog({ open: true, driverId, driverName, reason: "" });
   };
 
   const handleRejectSubmit = async () => {
@@ -417,9 +402,7 @@ function AdminDashboard() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          rejectionReason: rejectionDialog.reason,
-        }),
+        body: JSON.stringify({ rejectionReason: rejectionDialog.reason }),
       });
       if (!res.ok) throw new Error(t("admin.reject_driver_failed"));
       toast.success(t("admin.driver_rejected"));
@@ -427,6 +410,39 @@ function AdminDashboard() {
       fetchData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("admin.reject_driver_failed"));
+    }
+  };
+
+  // 🚨 [FIXED]: New Settlement Action
+  const handleClearSettlement = async (userId: string, amount: number) => {
+    if (!window.confirm(`Are you sure you want to mark ₹${amount} as paid to this driver?`)) return;
+    
+    const token = localStorage.getItem("kshira_admin_token");
+    if (!token) return;
+
+    setProcessingId(userId);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/settlements/${userId}/clear`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount,
+          upiReference: upiRefs[userId] || "Manual Cash/UPI"
+        }),
+      });
+      
+      if (!res.ok) throw new Error("Failed to clear settlement");
+      
+      toast.success("Settlement marked as cleared!");
+      setUpiRefs(prev => ({ ...prev, [userId]: "" }));
+      fetchData(); 
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to clear settlement");
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -464,9 +480,7 @@ function AdminDashboard() {
 
         <Separator className="mb-6" />
 
-        {/* 🚨 Yahan Layout ko Responsive banaya gaya hai */}
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Sidebar / Top Navigation on Mobile */}
           <div className="w-full md:w-64 flex-shrink-0 overflow-x-auto no-scrollbar pb-2 md:pb-0">
             <nav className="flex flex-row md:flex-col gap-2 min-w-max md:min-w-0">
               {[
@@ -475,6 +489,7 @@ function AdminDashboard() {
                 { id: "passengers", label: t("admin.passengers.title"), icon: UserX },
                 { id: "rides", label: t("admin.rides.title"), icon: Car },
                 { id: "bookings", label: t("admin.bookings.title"), icon: Calendar },
+                { id: "settlements", label: "Ledger Settlements", icon: Banknote }, // 🚨 NAYA TAB
               ].map((tab) => (
                 <Button
                   key={tab.id}
@@ -487,12 +502,14 @@ function AdminDashboard() {
                 >
                   <tab.icon className="h-4 w-4" />
                   {tab.label}
+                  {tab.id === "settlements" && settlements.length > 0 && (
+                    <Badge className="ml-auto bg-orange-500 text-white hover:bg-orange-600">{settlements.length}</Badge>
+                  )}
                 </Button>
               ))}
             </nav>
           </div>
 
-          {/* Content Area */}
           <div className="flex-1 min-w-0">
             <motion.div
               key={activeTab}
@@ -500,6 +517,7 @@ function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
+              {/* STATS TAB */}
               {activeTab === "stats" && stats && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="p-6 rounded-xl border bg-card">
@@ -550,7 +568,79 @@ function AdminDashboard() {
                 </div>
               )}
 
-              {/* 🚨 Saari tables ko overflow-x-auto mein wrap kiya gaya hai */}
+              {/* 🚨 NAYA TAB: SETTLEMENTS */}
+              {activeTab === "settlements" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h2 className="text-xl font-bold">Pending Driver Payouts</h2>
+                      <p className="text-sm text-muted-foreground">Clear out ledger balances owed to drivers.</p>
+                    </div>
+                    <div className="bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 text-right">
+                      <p className="text-[10px] font-bold text-primary uppercase">Total Owed</p>
+                      <p className="font-bold text-lg">₹{settlements.reduce((sum, item) => sum + item.pendingBalance, 0)}</p>
+                    </div>
+                  </div>
+
+                  {settlements.length === 0 ? (
+                    <div className="text-center py-16 rounded-xl border bg-card">
+                      <CheckCircle className="h-10 w-10 text-emerald-500/50 mx-auto mb-3" />
+                      <p className="text-muted-foreground">All driver ledger payouts are cleared!</p>
+                    </div>
+                  ) : (
+                    settlements.map((wallet) => (
+                      <div key={wallet._id} className="rounded-xl border bg-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10 border border-primary/20">
+                            <AvatarImage src={wallet.userId?.avatarUrl} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                              {wallet.userId?.fullName?.substring(0, 2).toUpperCase() || "DR"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h3 className="font-semibold">{wallet.userId?.fullName || "Unknown Driver"}</h3>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Phone className="h-3 w-3" /> {wallet.userId?.phone || "No phone"}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row items-center gap-3 bg-muted/30 p-2.5 rounded-lg border">
+                          <div className="text-center sm:text-right px-2">
+                            <p className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Owed</p>
+                            <p className="text-lg font-bold text-orange-500">₹{wallet.pendingBalance}</p>
+                          </div>
+                          
+                          <div className="hidden sm:block h-8 w-px bg-border"></div>
+                          
+                          <div className="flex w-full sm:w-auto items-center gap-2">
+                            <Input 
+                              placeholder="UPI Ref (Optional)" 
+                              value={upiRefs[wallet.userId?._id] || ""}
+                              onChange={(e) => setUpiRefs(prev => ({ ...prev, [wallet.userId?._id]: e.target.value }))}
+                              className="w-full sm:w-40 h-8 text-xs bg-background"
+                            />
+                            <Button 
+                              onClick={() => handleClearSettlement(wallet.userId._id, wallet.pendingBalance)}
+                              disabled={processingId === wallet.userId._id}
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 h-8"
+                            >
+                              {processingId === wallet.userId._id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Mark Paid"
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* DRIVERS TAB */}
               {activeTab === "drivers" && (
                 <div className="rounded-xl border bg-card overflow-hidden">
                   <div className="overflow-x-auto">
@@ -609,6 +699,7 @@ function AdminDashboard() {
                 </div>
               )}
 
+              {/* PASSENGERS TAB */}
               {activeTab === "passengers" && (
                 <div className="rounded-xl border bg-card overflow-hidden">
                   <div className="overflow-x-auto">
@@ -651,6 +742,7 @@ function AdminDashboard() {
                 </div>
               )}
 
+              {/* RIDES TAB */}
               {activeTab === "rides" && (
                 <div className="rounded-xl border bg-card overflow-hidden">
                   <div className="overflow-x-auto">
@@ -710,6 +802,7 @@ function AdminDashboard() {
                 </div>
               )}
 
+              {/* BOOKINGS TAB */}
               {activeTab === "bookings" && (
                 <div className="rounded-xl border bg-card overflow-hidden">
                   <div className="overflow-x-auto">
@@ -769,9 +862,7 @@ function AdminDashboard() {
       <Footer />
 
       {/* Rejection Dialog */}
-      <Dialog open={rejectionDialog.open} onOpenChange={(open) => 
-        setRejectionDialog(prev => ({ ...prev, open }))
-      }>
+      <Dialog open={rejectionDialog.open} onOpenChange={(open) => setRejectionDialog(prev => ({ ...prev, open }))}>
         <DialogContent className="sm:max-w-md w-[95vw] mx-auto rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -822,10 +913,8 @@ function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* View Driver Details Dialog - Fully Responsive */}
-      <Dialog open={viewDialog.open} onOpenChange={(open) => 
-        setViewDialog(prev => ({ ...prev, open }))
-      }>
+      {/* View Driver Details Dialog */}
+      <Dialog open={viewDialog.open} onOpenChange={(open) => setViewDialog(prev => ({ ...prev, open }))}>
         <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto rounded-xl p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -854,104 +943,32 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Info Grid - 1 col on mobile, 2 cols on bigger screens */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Vehicle Number</Label>
-                  <p className="font-medium text-sm">{viewDialog.driver.vehicleNumber || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Vehicle Seats</Label>
-                  <p className="font-medium text-sm">{viewDialog.driver.vehicleSeats || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Bank Account</Label>
-                  <p className="font-medium text-sm break-all">{viewDialog.driver.bankAccountNumber || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">IFSC Code</Label>
-                  <p className="font-medium text-sm">{viewDialog.driver.ifscCode || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Profile Status</Label>
-                  <div className="mt-1">
-                    {viewDialog.driver.isProfileComplete ? (
-                      <Badge className="bg-green-600">Complete</Badge>
-                    ) : (
-                      <Badge variant="outline">Incomplete</Badge>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Approval Status</Label>
-                  <div className="mt-1">
-                    {viewDialog.driver.isApproved ? (
-                      <Badge className="bg-green-600">Approved</Badge>
-                    ) : (
-                      <Badge variant="destructive">Pending Approval</Badge>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Account Status</Label>
-                  <div className="mt-1">
-                    {viewDialog.driver.isBlocked ? (
-                      <Badge variant="destructive">Blocked</Badge>
-                    ) : (
-                      <Badge className="bg-green-600">Active</Badge>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Member Since</Label>
-                  <p className="font-medium text-sm">
-                    {viewDialog.driver.createdAt ? format(new Date(viewDialog.driver.createdAt), "MMM dd, yyyy") : "—"}
-                  </p>
-                </div>
+                <div><Label className="text-xs text-muted-foreground">Vehicle Number</Label><p className="font-medium text-sm">{viewDialog.driver.vehicleNumber || "—"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Vehicle Seats</Label><p className="font-medium text-sm">{viewDialog.driver.vehicleSeats || "—"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Bank Account</Label><p className="font-medium text-sm break-all">{viewDialog.driver.bankAccountNumber || "—"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">IFSC Code</Label><p className="font-medium text-sm">{viewDialog.driver.ifscCode || "—"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Profile Status</Label><div className="mt-1">{viewDialog.driver.isProfileComplete ? <Badge className="bg-green-600">Complete</Badge> : <Badge variant="outline">Incomplete</Badge>}</div></div>
+                <div><Label className="text-xs text-muted-foreground">Approval Status</Label><div className="mt-1">{viewDialog.driver.isApproved ? <Badge className="bg-green-600">Approved</Badge> : <Badge variant="destructive">Pending Approval</Badge>}</div></div>
+                <div><Label className="text-xs text-muted-foreground">Account Status</Label><div className="mt-1">{viewDialog.driver.isBlocked ? <Badge variant="destructive">Blocked</Badge> : <Badge className="bg-green-600">Active</Badge>}</div></div>
+                <div><Label className="text-xs text-muted-foreground">Member Since</Label><p className="font-medium text-sm">{viewDialog.driver.createdAt ? format(new Date(viewDialog.driver.createdAt), "MMM dd, yyyy") : "—"}</p></div>
               </div>
 
-              {/* 🚨 Documents Section with Beautiful Cards */}
               <div className="space-y-3 pt-2">
                 <Label className="text-sm font-bold border-b pb-2 block w-full">Uploaded Documents</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  {viewDialog.driver.drivingLicense?.frontUrl && (
-                    <DocumentLink href={viewDialog.driver.drivingLicense.frontUrl} label="Driving License (Front)" />
-                  )}
-                  {viewDialog.driver.drivingLicense?.backUrl && (
-                    <DocumentLink href={viewDialog.driver.drivingLicense.backUrl} label="Driving License (Back)" />
-                  )}
-                  {viewDialog.driver.aadharCard?.frontUrl && (
-                    <DocumentLink href={viewDialog.driver.aadharCard.frontUrl} label="Aadhar Card (Front)" />
-                  )}
-                  {viewDialog.driver.aadharCard?.backUrl && (
-                    <DocumentLink href={viewDialog.driver.aadharCard.backUrl} label="Aadhar Card (Back)" />
-                  )}
-                  {viewDialog.driver.panCard?.frontUrl && (
-                    <DocumentLink href={viewDialog.driver.panCard.frontUrl} label="PAN Card" />
-                  )}
-                  {viewDialog.driver.rc?.frontUrl && (
-                    <DocumentLink href={viewDialog.driver.rc.frontUrl} label="RC (Front)" />
-                  )}
-                  {viewDialog.driver.rc?.backUrl && (
-                    <DocumentLink href={viewDialog.driver.rc.backUrl} label="RC (Back)" />
-                  )}
-                  {viewDialog.driver.vehicleImage?.url && (
-                    <DocumentLink href={viewDialog.driver.vehicleImage.url} label="Vehicle Image" />
-                  )}
-                  {viewDialog.driver.insuranceCertificate?.url && (
-                    <DocumentLink href={viewDialog.driver.insuranceCertificate.url} label="Insurance Certificate" />
-                  )}
-                  {viewDialog.driver.pollutionCertificate?.url && (
-                    <DocumentLink href={viewDialog.driver.pollutionCertificate.url} label="Pollution Certificate" />
-                  )}
+                  {viewDialog.driver.drivingLicense?.frontUrl && <DocumentLink href={viewDialog.driver.drivingLicense.frontUrl} label="Driving License (Front)" />}
+                  {viewDialog.driver.drivingLicense?.backUrl && <DocumentLink href={viewDialog.driver.drivingLicense.backUrl} label="Driving License (Back)" />}
+                  {viewDialog.driver.aadharCard?.frontUrl && <DocumentLink href={viewDialog.driver.aadharCard.frontUrl} label="Aadhar Card (Front)" />}
+                  {viewDialog.driver.aadharCard?.backUrl && <DocumentLink href={viewDialog.driver.aadharCard.backUrl} label="Aadhar Card (Back)" />}
+                  {viewDialog.driver.panCard?.frontUrl && <DocumentLink href={viewDialog.driver.panCard.frontUrl} label="PAN Card" />}
+                  {viewDialog.driver.rc?.frontUrl && <DocumentLink href={viewDialog.driver.rc.frontUrl} label="RC (Front)" />}
+                  {viewDialog.driver.rc?.backUrl && <DocumentLink href={viewDialog.driver.rc.backUrl} label="RC (Back)" />}
+                  {viewDialog.driver.vehicleImage?.url && <DocumentLink href={viewDialog.driver.vehicleImage.url} label="Vehicle Image" />}
+                  {viewDialog.driver.insuranceCertificate?.url && <DocumentLink href={viewDialog.driver.insuranceCertificate.url} label="Insurance Certificate" />}
+                  {viewDialog.driver.pollutionCertificate?.url && <DocumentLink href={viewDialog.driver.pollutionCertificate.url} label="Pollution Certificate" />}
 
-                  {(!viewDialog.driver.drivingLicense?.frontUrl && 
-                    !viewDialog.driver.aadharCard?.frontUrl && 
-                    !viewDialog.driver.panCard?.frontUrl && 
-                    !viewDialog.driver.rc?.frontUrl && 
-                    !viewDialog.driver.vehicleImage?.url &&
-                    !viewDialog.driver.insuranceCertificate?.url &&
-                    !viewDialog.driver.pollutionCertificate?.url) && (
+                  {(!viewDialog.driver.drivingLicense?.frontUrl && !viewDialog.driver.aadharCard?.frontUrl && !viewDialog.driver.panCard?.frontUrl && !viewDialog.driver.rc?.frontUrl && !viewDialog.driver.vehicleImage?.url && !viewDialog.driver.insuranceCertificate?.url && !viewDialog.driver.pollutionCertificate?.url) && (
                     <div className="col-span-1 sm:col-span-2 p-4 text-center border border-dashed rounded-lg bg-muted/20">
                       <p className="text-sm text-muted-foreground">No documents uploaded yet</p>
                     </div>
@@ -961,49 +978,15 @@ function AdminDashboard() {
 
               <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-4">
                 {!viewDialog.driver.isApproved && (
-                  <Button
-                    onClick={() => handleApproveDriver(viewDialog.driver!._id)}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    Approve Driver
-                  </Button>
+                  <Button onClick={() => handleApproveDriver(viewDialog.driver!._id)} className="flex-1 bg-green-600 hover:bg-green-700">Approve Driver</Button>
                 )}
-
                 {!viewDialog.driver.isApproved && (
-                  <Button
-                    onClick={() => {
-                      handleRejectDriver(viewDialog.driver!._id, viewDialog.driver!.fullName || "This Driver");
-                      setViewDialog({ open: false, driver: null });
-                    }}
-                    variant="outline"
-                    className="flex-1 text-red-600 hover:bg-red-50 border-red-200"
-                  >
-                    Reject Application
-                  </Button>
+                  <Button onClick={() => { handleRejectDriver(viewDialog.driver!._id, viewDialog.driver!.fullName || "This Driver"); setViewDialog({ open: false, driver: null }); }} variant="outline" className="flex-1 text-red-600 hover:bg-red-50 border-red-200">Reject Application</Button>
                 )}
-
                 {viewDialog.driver.isBlocked ? (
-                  <Button
-                    onClick={() => {
-                      handleUnblockDriver(viewDialog.driver!._id);
-                      setViewDialog({ open: false, driver: null });
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Unblock Driver
-                  </Button>
+                  <Button onClick={() => { handleUnblockDriver(viewDialog.driver!._id); setViewDialog({ open: false, driver: null }); }} variant="outline" className="flex-1">Unblock Driver</Button>
                 ) : (
-                  <Button
-                    onClick={() => {
-                      handleBlockDriver(viewDialog.driver!._id);
-                      setViewDialog({ open: false, driver: null });
-                    }}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    Block Driver
-                  </Button>
+                  <Button onClick={() => { handleBlockDriver(viewDialog.driver!._id); setViewDialog({ open: false, driver: null }); }} variant="destructive" className="flex-1">Block Driver</Button>
                 )}
               </div>
             </div>

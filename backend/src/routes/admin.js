@@ -4,13 +4,15 @@ const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const Ride = require("../models/Ride");
 const Booking = require("../models/Booking");
+const Wallet = require("../models/Wallet"); // 🚨 NAYA ADD KIYA
+const Transaction = require("../models/Transaction"); // 🚨 NAYA ADD KIYA
 const { protect, adminOnly } = require("../middleware/auth");
 const adminAuth = require("../middleware/adminAuth");
 const { sendDriverApprovalEmail } = require("../utils/email");
 
 const router = express.Router();
 
-// POST /api/admin/login — admin login with .env credentials
+// POST /api/admin/login
 router.post(
   "/login",
   [
@@ -43,7 +45,7 @@ router.post(
   }
 );
 
-// GET /api/admin/users — get all users
+// GET /api/admin/users
 router.get("/users", adminAuth, async (req, res) => {
   try {
     const users = await User.find().select("-password -passwordChangedAt -bankAccountNumber -ifscCode").sort({ createdAt: -1 });
@@ -53,26 +55,22 @@ router.get("/users", adminAuth, async (req, res) => {
   }
 });
 
-// GET /api/admin/drivers — get all drivers with detailed info
+// GET /api/admin/drivers
 router.get("/drivers", adminAuth, async (req, res) => {
   try {
-    // 🚨 [FIX]: Yahan par insuranceCertificate aur pollutionCertificate add kar diye hain
     const drivers = await User.find({ role: "driver" })
       .select("fullName email phone role avatarUrl vehicleSeats vehicleNumber isProfileComplete bankAccountNumber ifscCode earnings isBlocked isApproved createdAt drivingLicense aadharCard panCard rc vehicleImage insuranceCertificate pollutionCertificate")
       .sort({ createdAt: -1 });
 
-    // Get detailed stats for each driver
     const driversWithStats = await Promise.all(
       drivers.map(async (driver) => {
         const rideCount = await Ride.countDocuments({ driverId: driver._id });
         const completedRides = await Ride.countDocuments({ driverId: driver._id, status: "completed" });
         const activeRides = await Ride.countDocuments({ driverId: driver._id, status: "active" });
 
-        // Calculate earnings from completed rides
         const rides = await Ride.find({ driverId: driver._id, status: "completed" });
         const revenue = rides.reduce((sum, ride) => sum + (ride.pricePerSeat * (ride.seatsTotal - ride.seatsAvailable)), 0);
 
-        // Get pending passengers
         const activeRideIds = (await Ride.find({ driverId: driver._id, status: "active" })).map(r => r._id);
         const pendingBookings = await Booking.countDocuments({
           rideId: { $in: activeRideIds },
@@ -97,26 +95,52 @@ router.get("/drivers", adminAuth, async (req, res) => {
   }
 });
 
-// POST /api/admin/drivers/:id/release-payment — release payment to driver
-router.post("/drivers/:id/release-payment", adminAuth, async (req, res) => {
+// 🚨 [FIXED]: NAYA MANUAL SETTLEMENT LOGIC (Purana release-payment hata diya)
+
+// GET /api/admin/settlements — Fetch all drivers with pending ledger balances
+router.get("/settlements", adminAuth, async (req, res) => {
   try {
-    const driver = await User.findById(req.params.id);
-    if (!driver) return res.status(404).json({ message: "Driver not found." });
-    if (driver.role !== "driver") return res.status(400).json({ message: "User is not a driver." });
-
-    const rides = await Ride.find({ driverId: driver._id, status: "completed" });
-    const totalEarnings = rides.reduce((sum, ride) => sum + (ride.pricePerSeat * (ride.seatsTotal - ride.seatsAvailable)), 0);
-
-    driver.earnings = totalEarnings;
-    await driver.save();
-
-    res.json({ message: "Payment released successfully", earnings: driver.earnings });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    const pendingWallets = await Wallet.find({ pendingBalance: { $gt: 0 } })
+      .populate("userId", "fullName phone email avatarUrl")
+      .sort({ pendingBalance: -1 });
+    res.status(200).json(pendingWallets);
+  } catch (error) {
+    console.error("Error fetching settlements:", error);
+    res.status(500).json({ message: "Server error fetching settlements" });
   }
 });
 
-// POST /api/admin/drivers/:id/block — block a driver
+// POST /api/admin/settlements/:userId/clear — Mark a driver's pending payout as paid
+router.post("/settlements/:userId/clear", adminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { amount, upiReference } = req.body; 
+
+    const wallet = await Wallet.findOne({ userId });
+    
+    if (!wallet) return res.status(404).json({ message: "Wallet not found" });
+    if (wallet.pendingBalance < amount) return res.status(400).json({ message: "Amount is greater than pending balance!" });
+
+    wallet.pendingBalance -= amount;
+    wallet.balance += amount; 
+    await wallet.save();
+
+    await Transaction.create({
+      userId,
+      type: "SETTLEMENT_CLEARED",
+      amount,
+      status: "COMPLETED",
+      description: `Manual admin settlement via UPI. Ref: ${upiReference || 'N/A'}`
+    });
+
+    res.status(200).json({ success: true, message: "Settlement cleared successfully", wallet });
+  } catch (error) {
+    console.error("Error clearing settlement:", error);
+    res.status(500).json({ message: "Server error clearing settlement" });
+  }
+});
+
+// POST /api/admin/drivers/:id/block
 router.post("/drivers/:id/block", adminAuth, async (req, res) => {
   try {
     const driver = await User.findById(req.params.id);
@@ -126,18 +150,14 @@ router.post("/drivers/:id/block", adminAuth, async (req, res) => {
     driver.isBlocked = true;
     await driver.save();
 
-    await Ride.updateMany(
-      { driverId: driver._id, status: "active" },
-      { status: "cancelled" }
-    );
-
+    await Ride.updateMany({ driverId: driver._id, status: "active" }, { status: "cancelled" });
     res.json({ message: "Driver blocked successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// POST /api/admin/drivers/:id/unblock — unblock a driver
+// POST /api/admin/drivers/:id/unblock
 router.post("/drivers/:id/unblock", adminAuth, async (req, res) => {
   try {
     const driver = await User.findById(req.params.id);
@@ -153,7 +173,7 @@ router.post("/drivers/:id/unblock", adminAuth, async (req, res) => {
   }
 });
 
-// POST /api/admin/drivers/:id/approve — approve driver profile
+// POST /api/admin/drivers/:id/approve
 router.post("/drivers/:id/approve", adminAuth, async (req, res) => {
   try {
     const driver = await User.findById(req.params.id);
@@ -176,7 +196,7 @@ router.post("/drivers/:id/approve", adminAuth, async (req, res) => {
   }
 });
 
-// POST /api/admin/drivers/:id/reject — reject driver profile
+// POST /api/admin/drivers/:id/reject
 router.post("/drivers/:id/reject", 
   [
     body("rejectionReason").optional().isString().isLength({ min: 1, max: 500 }).withMessage("Rejection reason must be between 1 and 500 characters"),
@@ -213,7 +233,7 @@ router.post("/drivers/:id/reject",
   }
 });
 
-// DELETE /api/admin/users/:id — delete user
+// DELETE /api/admin/users/:id
 router.delete("/users/:id", adminAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -221,34 +241,31 @@ router.delete("/users/:id", adminAuth, async (req, res) => {
 
     await Ride.deleteMany({ driverId: req.params.id });
     await Booking.deleteMany({ passengerId: req.params.id });
-
     await User.findByIdAndDelete(req.params.id);
+    
     res.json({ message: "User deleted successfully." });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// GET /api/admin/rides — get all rides
+// GET /api/admin/rides
 router.get("/rides", adminAuth, async (req, res) => {
   try {
-    const rides = await Ride.find()
-      .populate("driverId", "fullName email phone")
-      .sort({ createdAt: -1 });
+    const rides = await Ride.find().populate("driverId", "fullName email phone").sort({ createdAt: -1 });
     res.json(rides);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// DELETE /api/admin/rides/:id — delete ride
+// DELETE /api/admin/rides/:id
 router.delete("/rides/:id", adminAuth, async (req, res) => {
   try {
     const ride = await Ride.findById(req.params.id);
     if (!ride) return res.status(404).json({ message: "Ride not found." });
 
     await Booking.deleteMany({ rideId: req.params.id });
-
     await Ride.findByIdAndDelete(req.params.id);
     res.json({ message: "Ride deleted successfully." });
   } catch (err) {
@@ -256,7 +273,7 @@ router.delete("/rides/:id", adminAuth, async (req, res) => {
   }
 });
 
-// GET /api/admin/bookings — get all bookings
+// GET /api/admin/bookings
 router.get("/bookings", adminAuth, async (req, res) => {
   try {
     const bookings = await Booking.find()
@@ -269,16 +286,13 @@ router.get("/bookings", adminAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/admin/bookings/:id — delete booking
+// DELETE /api/admin/bookings/:id
 router.delete("/bookings/:id", adminAuth, async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
     if (!booking) return res.status(404).json({ message: "Booking not found." });
 
-    await Ride.findByIdAndUpdate(booking.rideId, {
-      $inc: { seatsAvailable: booking.seats },
-    });
-
+    await Ride.findByIdAndUpdate(booking.rideId, { $inc: { seatsAvailable: booking.seats } });
     await Booking.findByIdAndDelete(req.params.id);
     res.json({ message: "Booking deleted successfully." });
   } catch (err) {
@@ -286,7 +300,7 @@ router.delete("/bookings/:id", adminAuth, async (req, res) => {
   }
 });
 
-// GET /api/admin/stats — get dashboard statistics
+// GET /api/admin/stats
 router.get("/stats", adminAuth, async (req, res) => {
   try {
     const [userCount, rideCount, bookingCount] = await Promise.all([

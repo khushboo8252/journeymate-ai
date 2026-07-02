@@ -11,7 +11,6 @@ import {
   Car,
   Check,
   CheckCircle,
-  ExternalLink,
   IndianRupee,
   Lock,
   Loader2,
@@ -27,7 +26,6 @@ import {
   User,
   Users,
   X,
-  Wind,
   Banknote
 } from "lucide-react";
 import { RideCard } from "@/components/site/RideCard";
@@ -41,7 +39,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { LocationAutocomplete, type LocationData } from "@/components/ui/LocationAutocomplete";
 import { useAuth } from "@/hooks/use-auth";
@@ -108,6 +105,9 @@ function DashboardPage() {
       joinUserRoom(user._id);
     }
 
+    // 🚨 [FIXED]: Memory Leak Timer Fix
+    let approvalTimer: NodeJS.Timeout;
+
     const checkApprovalStatus = async () => {
       try {
         const userData = await api.get<{ user: ApiUser }>("/api/profile");
@@ -116,12 +116,10 @@ function DashboardPage() {
         if (isDriver && updatedUser.isApproved && !updatedUser.hasSeenApprovalNotification) {
           setShowApprovalPopup(true);
 
-          const timer = setTimeout(() => {
+          approvalTimer = setTimeout(() => {
             setShowApprovalPopup(false);
             api.post("/api/profile/notification-seen", {}).catch(console.error);
           }, 10000);
-
-          return () => clearTimeout(timer);
         }
       } catch (err) {
         console.error("Failed to check approval status:", err);
@@ -137,10 +135,9 @@ function DashboardPage() {
       if (driver._id === user._id) {
         setShowApprovalPopup(true);
         toast.success(t("dashboard.approval_popup"));
-        // Refresh user data to update approval status
         try {
           const userData = await api.get<{ user: ApiUser }>("/api/profile");
-          setUser(userData.user); // Update user state without reload
+          setUser(userData.user); 
         } catch (err) {
           console.error("Failed to refresh user data:", err);
         }
@@ -150,10 +147,9 @@ function DashboardPage() {
     socket.on("driver_rejected", async (data) => {
       if (data.driver._id === user._id) {
         toast.error(`Your driver profile has been rejected. ${data.rejectionReason || "Please update your documents."}`);
-        // Refresh user data to update approval status
         try {
           const userData = await api.get<{ user: ApiUser }>("/api/profile");
-          setUser(userData.user); // Update user state without reload
+          setUser(userData.user); 
         } catch (err) {
           console.error("Failed to refresh user data:", err);
         }
@@ -238,19 +234,17 @@ function DashboardPage() {
       }
     });
 
-    // New ride created - refresh search results for passengers
     socket.on("ride_created", (ride) => {
       if (!isDriver) {
         toast.success("New ride available matching your search!");
-        // Refresh search results if user has active search
         if (searchFrom || searchTo || searchDate) {
           handleSearch();
         }
       }
     });
 
-
     return () => {
+      if (approvalTimer) clearTimeout(approvalTimer); // 🚨 [FIXED]: Secure Timer Cleanup
       socket.off("driver_approved");
       socket.off("driver_rejected");
       socket.off("booking_created");
@@ -365,18 +359,6 @@ function DashboardPage() {
     }
   };
 
-  const cancelDriverBookingByDriver = async (bookingId: string) => {
-    const confirmed = window.confirm("Are you sure you want to cancel this passenger's booking?");
-    if (!confirmed) return;
-    try {
-      await api.patch(`/api/bookings/${bookingId}/cancel`);
-      toast.success("Passenger booking cancelled.");
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to cancel booking");
-    }
-  };
-
   const confirmRide = async (rideId: string) => {
     try {
       const response = await api.patch<{
@@ -397,22 +379,12 @@ function DashboardPage() {
     }
   };
 
-  // 🚨 [MODIFIED]: Ab Passenger ko instant Socket emission bhi jaayegi
-  const confirmPassengerPayment = async (bookingId: string, passengerName: string, rideId?: string, passengerUserId?: string) => {
+  const confirmPassengerPayment = async (bookingId: string, passengerName: string) => {
     try {
+      // 🚨 [FIXED]: Frontend emit removed for security. Backend API handles it now.
       await api.patch(`/api/bookings/${bookingId}/confirm-payment`);
-      
-      // Emit socket event to notify passenger immediately
-      if (rideId && passengerUserId) {
-        const socket = getSocket();
-        socket.emit('payment_confirmed', { 
-          rideId: rideId, 
-          passengerId: passengerUserId 
-        });
-      }
-
       toast.success(`Payment confirmed for ${passengerName}`);
-      fetchData(); // UI update
+      fetchData(); 
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to confirm payment");
     }
@@ -919,7 +891,7 @@ function DashboardPage() {
                               </div>
                             </div>
                             
-                            {/* 🚨 [MODIFIED]: Disable button if already confirmed 🚨 */}
+                            {/* 🚨 [MODIFIED]: Button logic simplified securely 🚨 */}
                             {booking.isPaymentConfirmedByDriver ? (
                               <div className="mt-4 bg-green-500/10 border border-green-500/20 rounded-xl p-3 flex flex-col items-center justify-center">
                                 <CheckCircle className="h-6 w-6 text-green-600 mb-1" />
@@ -928,7 +900,7 @@ function DashboardPage() {
                             ) : (
                               <>
                                 <Button
-                                  onClick={() => confirmPassengerPayment(booking._id, passenger?.fullName || "Passenger", ride?._id, passenger?._id)}
+                                  onClick={() => confirmPassengerPayment(booking._id, passenger?.fullName || "Passenger")}
                                   className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold mt-4 shadow-md shadow-green-600/20"
                                 >
                                   <CheckCircle className="h-4 w-4 mr-2" />

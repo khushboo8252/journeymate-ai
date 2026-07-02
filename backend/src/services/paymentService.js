@@ -4,45 +4,52 @@ const Transaction = require("../models/Transaction");
 const { createOrder, verifyPayment, fetchPayment, createPayout } = require("../utils/razorpay");
 const { payoutQueue } = require("../config/queue");
 
-const UPFRONT_PERCENTAGE = 0.00; // 0% upfront - only GST
-const COMMISSION_PERCENTAGE = 0.10; // 10% platform commission
-const PAYOUT_DELAY_HOURS = 3; // 3 hours delay for driver payout
+// 🚨 [UPDATED CONSTANTS]: Aligned strictly with your business logic
+const COMMISSION_PERCENTAGE = 0.05; // 5% platform commission
+const UPFRONT_PERCENTAGE = 0.0952;  // ~9.52% upfront payment (app ke paas aayega)
+const PAYOUT_DELAY_HOURS = 3; 
 
 /**
  * Calculate payment amounts for a ride
- * @param {number} baseFare - Base fare set by driver (without fees)
+ * Math Example: If driver sets 100rs base fare:
+ * totalBaseFare = 100
+ * platformFee = 5 (5%)
+ * totalFare = 105 (Passenger ko dikhega)
+ * upfrontAmount = 10 (Razorpay par seat book hogi)
+ * remainingAmount = 95 (Passenger driver ko direct UPI/Cash dega)
+ * driverEarning = 5 (Admin ledger me add hoga jo driver ko wapas dena hai)
  */
 const calculatePaymentAmounts = (baseFare) => {
-  // Platform fee is 5% of base fare
-  const platformFee = baseFare * 0.05; // 5%
+  const totalBaseFare = Number(baseFare);
   
-  // Total fare is base + platform fee (no GST for passenger)
-  const totalFare = baseFare + platformFee;
+  // 1. Platform fee (5%)
+  const platformFee = Math.round(totalBaseFare * COMMISSION_PERCENTAGE); 
   
-  // Upfront payment is 9.52% of total fare
-  const upfrontAmount = Math.round(totalFare * 0.0952);
+  // 2. Total fare shown to the passenger
+  const totalFare = totalBaseFare + platformFee;
   
-  // Remaining payment is total fare minus upfront
-  const remainingAmount = Math.round(totalFare - upfrontAmount);
+  // 3. Upfront amount paid on the app via Razorpay (9.52% of totalFare)
+  const upfrontAmount = Math.round(totalFare * UPFRONT_PERCENTAGE);
   
-  // Driver receives full remaining amount (no commission deduction)
-  const driverEarning = remainingAmount;
+  // 4. Amount passenger will hand over to driver directly via Cash/UPI
+  const remainingAmount = totalFare - upfrontAmount;
+  
+  // 5. Amount platform owes the driver (Saved in Admin Ledger/Wallet)
+  // Math: 100 (Base) - 95 (Cash received) = 5 (Owed to driver)
+  const driverEarning = totalBaseFare - remainingAmount; 
 
   return {
-    baseFare,
+    baseFare: totalBaseFare,
     platformFee,
     totalFare,
     upfrontAmount,
-    remainingAmount,
-    driverEarning,
+    remainingAmount, // Passenger direct driver ko dega
+    driverEarning,   // Admin panel me dikhega manual refund ke liye
   };
 };
 
 /**
  * Create upfront payment order for booking
- * @param {string} rideId - Ride ID
- * @param {string} userId - User ID
- * @param {number} seatsBooked - Number of seats being booked
  */
 const createUpfrontPaymentOrder = async (rideId, userId, seatsBooked = 1) => {
   try {
@@ -52,14 +59,14 @@ const createUpfrontPaymentOrder = async (rideId, userId, seatsBooked = 1) => {
     }
 
     // Calculate total fare based on seats actually booked
-    const totalFare = ride.pricePerSeat * seatsBooked;
-    const { upfrontAmount } = calculatePaymentAmounts(totalFare);
+    const totalFareForSeats = ride.pricePerSeat * seatsBooked;
+    const { upfrontAmount, remainingAmount, driverEarning } = calculatePaymentAmounts(totalFareForSeats);
 
     // Update ride with payment details
-    ride.totalFare = totalFare;
+    ride.totalFare = totalFareForSeats;
     ride.upfrontPaid = 0;
-    ride.remainingAmount = totalFare - upfrontAmount;
-    ride.driverEarning = 0;
+    ride.remainingAmount = remainingAmount;
+    ride.driverEarning = driverEarning;
     await ride.save();
 
     // Create Razorpay order
@@ -88,10 +95,6 @@ const createUpfrontPaymentOrder = async (rideId, userId, seatsBooked = 1) => {
 
 /**
  * Verify and process upfront payment
- * @param {string} rideId - Ride ID
- * @param {string} paymentId - Razorpay payment ID
- * @param {string} signature - Razorpay signature
- * @param {string} userId - User ID
  */
 const processUpfrontPayment = async (rideId, paymentId, signature, userId) => {
   try {
@@ -113,9 +116,12 @@ const processUpfrontPayment = async (rideId, paymentId, signature, userId) => {
       throw new Error("Payment not captured");
     }
 
+    // 🚨 [FIXED]: Exact upfront amount dynamically check karke save hoga, ab 0 save nahi hoga
+    const { upfrontAmount } = calculatePaymentAmounts(ride.totalFare || ride.pricePerSeat);
+
     // Update ride payment status
     ride.razorpayPaymentId = paymentId;
-    ride.upfrontPaid = ride.totalFare * UPFRONT_PERCENTAGE;
+    ride.upfrontPaid = upfrontAmount; 
     ride.paymentStatus = "PARTIAL_PAID";
     await ride.save();
 
@@ -124,7 +130,7 @@ const processUpfrontPayment = async (rideId, paymentId, signature, userId) => {
       userId,
       rideId,
       type: "CREDIT",
-      amount: ride.upfrontPaid,
+      amount: upfrontAmount,
       description: "Upfront payment for ride booking",
       status: "COMPLETED",
       razorpayPaymentId: paymentId,
@@ -139,24 +145,14 @@ const processUpfrontPayment = async (rideId, paymentId, signature, userId) => {
 };
 
 /**
- * Create order for remaining 75% payment on ride completion
- * @param {string} rideId - Ride ID
- * @param {string} userId - User ID
+ * Create order for remaining payment (Kept for routing safety, but logic is simplified)
  */
 const createRemainingPaymentOrder = async (rideId, userId) => {
   try {
     const ride = await Ride.findById(rideId);
-    if (!ride) {
-      throw new Error("Ride not found");
-    }
-
-    if (ride.paymentStatus !== "PARTIAL_PAID") {
-      throw new Error("Ride payment status is not eligible for remaining payment");
-    }
+    if (!ride) throw new Error("Ride not found");
 
     const remainingAmount = ride.remainingAmount;
-
-    // Create Razorpay order
     const receipt = `ride_${rideId}_remaining`;
     const order = await createOrder(remainingAmount, receipt, {
       userId,
@@ -177,53 +173,21 @@ const createRemainingPaymentOrder = async (rideId, userId) => {
 };
 
 /**
- * Process remaining payment and calculate driver earnings
- * @param {string} rideId - Ride ID
- * @param {string} paymentId - Razorpay payment ID
- * @param {string} signature - Razorpay signature
- * @param {string} userId - User ID
+ * Process remaining payment (Kept for backward compatibility)
  */
 const processRemainingPayment = async (rideId, paymentId, signature, userId) => {
   try {
     const ride = await Ride.findById(rideId).populate("driverId");
-    if (!ride) {
-      throw new Error("Ride not found");
-    }
+    if (!ride) throw new Error("Ride not found");
 
-    // Verify payment
-    const isValid = verifyPayment(ride.razorpayOrderId, paymentId, signature);
-    if (!isValid) {
-      throw new Error("Invalid payment signature");
-    }
-
-    // Fetch payment details
-    const payment = await fetchPayment(paymentId);
-    if (payment.status !== "captured") {
-      throw new Error("Payment not captured");
-    }
-
-    // Calculate driver earnings
     const { driverEarning } = calculatePaymentAmounts(ride.totalFare);
 
-    // Update ride payment status
     ride.razorpayPaymentId = paymentId;
     ride.paymentStatus = "FULL_PAID";
     ride.driverEarning = driverEarning;
     await ride.save();
 
-    // Create transaction record for remaining payment
-    await Transaction.create({
-      userId,
-      rideId,
-      type: "CREDIT",
-      amount: ride.remainingAmount,
-      description: "Remaining payment for completed ride",
-      status: "COMPLETED",
-      razorpayPaymentId: paymentId,
-      razorpayOrderId: ride.razorpayOrderId,
-    });
-
-    // Add to driver's pending balance
+    // Add to driver's pending balance for internal admin ledger
     let wallet = await Wallet.findOne({ userId: ride.driverId._id });
     if (!wallet) {
       wallet = await Wallet.create({ userId: ride.driverId._id });
@@ -231,42 +195,6 @@ const processRemainingPayment = async (rideId, paymentId, signature, userId) => 
     wallet.pendingBalance += driverEarning;
     wallet.totalEarnings += driverEarning;
     await wallet.save();
-
-    // Create pending transaction for driver
-    await Transaction.create({
-      userId: ride.driverId._id,
-      rideId,
-      type: "PENDING_CREDIT",
-      amount: driverEarning,
-      description: "Driver earning (pending release)",
-      status: "PENDING",
-      metadata: {
-        driverEarning,
-      },
-    });
-
-    // Schedule payout release after 3 hours
-    const payoutReleaseAt = new Date(Date.now() + PAYOUT_DELAY_HOURS * 60 * 60 * 1000);
-    ride.payoutReleaseAt = payoutReleaseAt;
-    await ride.save();
-
-    // Add to queue for delayed payout (only if Redis is available)
-    if (payoutQueue) {
-      await payoutQueue.add(
-        "release-driver-payment",
-        {
-          rideId: ride._id,
-          driverId: ride.driverId._id,
-          amount: driverEarning,
-        },
-        {
-          delay: PAYOUT_DELAY_HOURS * 60 * 60 * 1000, // 3 hours in milliseconds
-          jobId: `payout_${ride._id}`,
-        }
-      );
-    } else {
-      console.log(`⚠️ Payout queue not available - driver earning will need manual release`);
-    }
 
     return { success: true, ride, driverEarning };
   } catch (error) {
@@ -276,69 +204,27 @@ const processRemainingPayment = async (rideId, paymentId, signature, userId) => 
 };
 
 /**
- * Release driver payment after delay period
- * @param {string} rideId - Ride ID
+ * Release driver payment (Internal Ledger management)
  */
 const releaseDriverPayment = async (rideId) => {
   try {
     const ride = await Ride.findById(rideId).populate("driverId");
-    if (!ride) {
-      throw new Error("Ride not found");
-    }
-
-    if (ride.paymentStatus !== "FULL_PAID") {
-      throw new Error("Ride payment is not complete");
-    }
-
-    if (ride.paymentStatus === "RELEASED") {
-      console.log(`Payout already released for ride ${rideId}`);
-      return { success: true, message: "Payout already released" };
-    }
+    if (!ride) throw new Error("Ride not found");
 
     const driverId = ride.driverId._id;
     const amount = ride.driverEarning;
 
-    // Get driver's wallet
     let wallet = await Wallet.findOne({ userId: driverId });
-    if (!wallet) {
-      throw new Error("Driver wallet not found");
+    if (!wallet) throw new Error("Driver wallet not found");
+
+    if (wallet.pendingBalance >= amount) {
+      wallet.pendingBalance -= amount;
+      wallet.balance += amount; // Available for manual admin payout clearing
+      await wallet.save();
     }
 
-    // Move from pending to available balance
-    if (wallet.pendingBalance < amount) {
-      throw new Error("Insufficient pending balance");
-    }
-
-    wallet.pendingBalance -= amount;
-    wallet.balance += amount;
-    await wallet.save();
-
-    // Update ride status
     ride.paymentStatus = "RELEASED";
     await ride.save();
-
-    // Update transaction status
-    await Transaction.findOneAndUpdate(
-      {
-        rideId,
-        type: "PENDING_CREDIT",
-        status: "PENDING",
-      },
-      {
-        status: "COMPLETED",
-        type: "RELEASED_CREDIT",
-        description: "Driver earning released to wallet",
-      }
-    );
-
-    // Create RazorpayX payout (if driver has bank details)
-    // This is optional - you can also let drivers withdraw manually
-    // const payout = await createPayout({
-    //   fundAccountId: driver.fundAccountId,
-    //   amount,
-    //   referenceId: `ride_${rideId}`,
-    //   notes: { rideId, driverId: driverId.toString() },
-    // });
 
     return { success: true, wallet, amount };
   } catch (error) {
@@ -354,7 +240,7 @@ module.exports = {
   createRemainingPaymentOrder,
   processRemainingPayment,
   releaseDriverPayment,
-  UPFRONT_PERCENTAGE,
   COMMISSION_PERCENTAGE,
+  UPFRONT_PERCENTAGE,
   PAYOUT_DELAY_HOURS,
 };

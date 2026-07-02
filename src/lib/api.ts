@@ -30,6 +30,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
   
   clearTimeout(timeoutId);
+
+  // 🚨 [FIXED]: Auto-Logout Engine on Token Expiry (401 Unauthorized)
+  if (res.status === 401) {
+    removeToken();
+    if (typeof window !== "undefined") {
+      window.location.href = "/auth?tab=signin"; // Redirects smoothly to login page
+    }
+    throw new Error("Session expired. Please log in again.");
+  }
+
   const data = await res.json();
 
   if (!res.ok) {
@@ -48,6 +58,8 @@ export const api = {
     request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+
+// ═══ TYPES & INTERFACES ═══
 
 export interface ApiUser {
   _id: string;
@@ -108,4 +120,8 @@ export interface ApiBooking {
   seats: number;
   status: "confirmed" | "cancelled";
   createdAt: string;
+  pickupPoint?: string | null;
+  deviationCharge?: number;
+  driverCashFare?: number;
+  isPaymentConfirmedByDriver?: boolean;
 }

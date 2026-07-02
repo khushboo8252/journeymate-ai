@@ -143,19 +143,16 @@ router.post(
       ride.seatsAvailable = Math.max(0, ride.seatsAvailable - booking.seats);
       await ride.save();
 
-      // 🚨 [FIXED CODE]: Seats ko permanently BOOKED mark karna
+      // 🚨 [FIXED CODE]: Smartly mark seats as BOOKED and clear all locks
       if (booking.seatNumbers && booking.seatNumbers.length > 0) {
-        // Agar array me numbers aaye hain
-        await Seat.updateMany(
-          { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
-          { $set: { status: "booked", passenger: userId } }
-        );
+        await Seat.bookSeats(booking.rideId, booking.seatNumbers, userId, booking._id);
       } else {
-        // Fallback: Agar kisi wajah se array empty hai, toh is ride ki jo bhi seats 'locked' hain, unhe booked kardo
-        await Seat.updateMany(
-          { rideId: booking.rideId, status: "locked" },
-          { $set: { status: "booked", passenger: userId } }
-        );
+        // Fallback: Agar seatNumbers missing hain, toh is user ki locked seats ko book kardo
+        const lockedSeats = await Seat.find({ rideId: booking.rideId, status: "locked", lockedBy: userId });
+        const lockedSeatNumbers = lockedSeats.map(s => s.seatNumber);
+        if (lockedSeatNumbers.length > 0) {
+          await Seat.bookSeats(booking.rideId, lockedSeatNumbers, userId, booking._id);
+        }
       }
 
       // Get driver details for email notification
@@ -247,17 +244,9 @@ router.patch("/:id/cancel", protect, async (req, res) => {
       ride.seatsAvailable = Math.min(ride.seatsTotal, ride.seatsAvailable + booking.seats);
       await ride.save();
 
-      // Booking cancel hone par seats ko wapas AVAILABLE mark karna
+      // 🚨 [FIXED CODE]: Properly release seats and clear all old booking data
       if (booking.seatNumbers && booking.seatNumbers.length > 0) {
-        await Seat.updateMany(
-          { rideId: booking.rideId, seatNumber: { $in: booking.seatNumbers } },
-          { 
-            $set: { 
-              status: "available", 
-              passenger: null 
-            } 
-          }
-        );
+        await Seat.releaseBookedSeats(booking.rideId, booking.seatNumbers);
       }
 
       // Emit real-time events
@@ -274,6 +263,7 @@ router.patch("/:id/cancel", protect, async (req, res) => {
 });
 
 // 🚨 SECURED ROUTE: Driver confirms passenger payment
+
 router.patch("/:id/confirm-payment", protect, restrictTo("driver"), async (req, res) => {
   try {
     const bookingId = req.params.id;
@@ -290,9 +280,19 @@ router.patch("/:id/confirm-payment", protect, restrictTo("driver"), async (req, 
       return res.status(403).json({ message: "Unauthorized. Only the driver of this ride can confirm payment." });
     }
 
-    // Update payment status
+    // Update payment status inside MongoDB
     booking.isPaymentConfirmedByDriver = true; 
     await booking.save();
+
+    // 🚨 [FIXED]: Server-side Secure Socket Event
+    // Passenger ke personal room (`user_PASSENGER_ID`) mein event trigger hoga
+    if (global.io && booking.passengerId) {
+      global.io.to(`user_${booking.passengerId}`).emit("payment_confirmed", {
+        rideId: booking.rideId._id,
+        bookingId: booking._id,
+        message: "Your cash/UPI payment has been verified by the driver."
+      });
+    }
 
     return res.status(200).json({ 
       success: true, 
@@ -305,5 +305,42 @@ router.patch("/:id/confirm-payment", protect, restrictTo("driver"), async (req, 
     return res.status(500).json({ message: "Server error confirming payment" });
   }
 });
+// POST /api/bookings/:id/notify-payment — Passenger notifies driver about cash/UPI payment
+router.post("/:id/notify-payment", protect, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    // Populate karke rideId layenge taaki driver ka ID mil sake
+    const booking = await Booking.findById(bookingId).populate("rideId");
 
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // Security Check: Make sure jo user request bhej raha hai, wo actual passenger hi ho
+    if (String(booking.passengerId) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Unauthorized. You cannot send notifications for this booking." });
+    }
+
+    const driverId = booking.rideId.driverId;
+    const amount = req.body.amount;
+
+    // Server securely driver ke exclusive room mein socket event fire karega
+    global.io.to(`driver_${driverId}`).emit("passenger_paid_driver", {
+      rideId: booking.rideId._id,
+      bookingId: booking._id,
+      driverId: driverId,
+      amount: amount,
+      passengerName: req.user.fullName
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Driver notified successfully." 
+    });
+
+  } catch (error) {
+    console.error("Error notifying payment:", error);
+    return res.status(500).json({ message: "Server error while notifying driver." });
+  }
+});
 module.exports = router;

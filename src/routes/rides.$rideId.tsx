@@ -18,7 +18,7 @@ import {
   Shield,
   MapPin,
   Clock,
-  CheckCircle, // 🚨 ADDED
+  CheckCircle,
 } from "lucide-react";
 import { DriverLocationMap } from "@/components/maps/DriverLocationMap";
 import { LocationTracker } from "@/components/driver/LocationTracker";
@@ -62,7 +62,7 @@ function RideDetailPage() {
   const [booking, setBooking] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
   
-  // 🚨 [NEW STATES]: Booking memory & Payment notification state
+  // Booking memory & Payment notification state
   const [myBooking, setMyBooking] = useState<any>(null);
   const [bookedSeatsCount, setBookedSeatsCount] = useState(0); 
   const [paymentNotified, setPaymentNotified] = useState(false);
@@ -82,8 +82,7 @@ function RideDetailPage() {
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
-  // Default location to show map immediately (will be updated when driver location arrives)
-  // Using a default location (New Delhi) to show map immediately
+  // Default location to show map immediately
   const mapLocation = driverLocation || { latitude: 28.6139, longitude: 77.2090 };
 
   useEffect(() => {
@@ -125,16 +124,14 @@ function RideDetailPage() {
       }
     });
 
-    // 🚨 [MODIFIED]: Ab driver action par booking DB dobara check karega
     socket.on("driver_confirmed_completion", (data: any) => {
       if (data.rideId === ride._id && !isDriver) {
         playAlertSound();
         fetchRide();
-        checkExistingBooking(); // Refresh to check if payment was accepted
+        checkExistingBooking(); 
       }
     });
     
-    // Generic re-fetch trigger in case backend sends custom event
     socket.on("payment_confirmed", () => {
       checkExistingBooking();
     });
@@ -216,8 +213,17 @@ function RideDetailPage() {
       setLoadingSeats(true);
       const res = await api.get<any>(`/api/rides/${rideId}/seats`);
       const rawSeats = Array.isArray(res) ? res : res.seats || [];
-      // Strictly ignore A1 (driver)
-      setSeatsList(rawSeats.filter((s: any) => s.seatNumber !== "A1" && s.type !== "driver")); 
+      
+      // 🚨 [FIXED]: Strictly ignore A1 (driver)
+      const availableSeats = rawSeats.filter((s: any) => s.seatNumber !== "A1" && s.type !== "driver");
+      setSeatsList(availableSeats);
+
+      // 🚨 [FIXED]: Clean up stale selected seats automatically (Race Condition Fix)
+      setSelectedSeats(prev => prev.filter(seatNum => {
+        const currentSeatState = availableSeats.find((s: any) => s.seatNumber === seatNum);
+        return currentSeatState && currentSeatState.status === "available";
+      }));
+
     } catch (err) {
       console.error("Failed to load seats", err);
     } finally {
@@ -225,7 +231,6 @@ function RideDetailPage() {
     }
   };
 
-  // 🚨 [MODIFIED]: Ab ye function poori booking object store karega
   const checkExistingBooking = async () => {
     if (!user || !ride) return;
     try {
@@ -237,7 +242,7 @@ function RideDetailPage() {
       if (found) {
         setAlreadyBooked(true);
         setBookedSeatsCount(found.seats || 1);
-        setMyBooking(found); // DB se payment status yahan mil jayega
+        setMyBooking(found); 
       } else {
         setAlreadyBooked(false);
         setMyBooking(null);
@@ -315,7 +320,7 @@ function RideDetailPage() {
                 setPickupPoint(""); 
                 fetchRide();
                 fetchPassengerSeats();
-                checkExistingBooking(); // Refresh state
+                checkExistingBooking(); 
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Failed to confirm booking");
               }
@@ -903,20 +908,22 @@ function RideDetailPage() {
                           <Button
                             onClick={async () => {
                               try {
-                                // Just emit socket event to notify driver without changing whole ride status
-                                const driverUserId = typeof ride?.driverId === "object" ? ride?.driverId?._id : ride?.driverId;
-                                const socket = getSocket();
-                                socket.emit('passenger_paid_driver', { 
-                                  rideId: rideId, 
-                                  driverId: driverUserId, 
-                                  amount: Math.round(ride.pricePerSeat * bookedSeatsCount * 1.05 - (ride.pricePerSeat * bookedSeatsCount * 1.05 * 0.0952)), 
-                                  passengerName: user?.fullName 
+                                if (!myBooking || !myBooking._id) {
+                                  toast.error("Booking details not found.");
+                                  return;
+                                }
+
+                                const amountToPay = Math.round(ride.pricePerSeat * bookedSeatsCount * 1.05 - (ride.pricePerSeat * bookedSeatsCount * 1.05 * 0.0952));
+                                
+                                // 🚨 [FIXED]: Direct Socket ki jagah secure API call lagayi gayi hai
+                                await api.post(`/api/bookings/${myBooking._id}/notify-payment`, {
+                                  amount: amountToPay
                                 });
 
                                 toast.success("Payment notification sent to driver.");
                                 setPaymentNotified(true); // Disable button & change UI instantly
                               } catch (err) {
-                                toast.error("Failed to notify driver.");
+                                toast.error("Failed to notify driver. Please try again.");
                               }
                             }}
                             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg shadow-green-600/30 h-12 rounded-xl"

@@ -102,39 +102,50 @@ function PublishPage() {
     },
   });
 
-  const onSubmit = async (values: FormValues) => {
-    if (!user) return;
-    try {
-      const seatCount = Number(values.vehicleSeats);
-      let vehicleType = "sedan";
-      if (seatCount >= 8) {
-        vehicleType = "van";
-      } else if (seatCount >= 6) {
-        vehicleType = "suv";
-      } else if (seatCount === 4) {
-        vehicleType = "hatchback";
-      }
-
-      await api.post("/api/rides", {
-        origin: values.origin,
-        destination: values.destination,
-        // 🚨 FUTURE-PROOFING: Send coordinates if available (from map), otherwise null (if manual)
-        originCoords: originLoc?.lat ? { lat: originLoc.lat, lng: originLoc.lon } : null,
-        destinationCoords: destLoc?.lat ? { lat: destLoc.lat, lng: destLoc.lon } : null,
-        departureAt: new Date(`${values.date}T${values.time}`).toISOString(),
-        arrivalAt: values.arrivalTime ? new Date(`${values.date}T${values.arrivalTime}`).toISOString() : null,
-        seatsTotal: seatCount,
-        pricePerSeat: Number(values.price),
-        description: values.description || null,
-        vehicleType,
-      });
-      toast.success(t("publish.success"));
-      navigate({ to: "/dashboard" });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("publish.error"));
+ const onSubmit = async (values: FormValues) => {
+  if (!user) return;
+  try {
+    const seatCount = Number(values.vehicleSeats);
+    let vehicleType = "sedan";
+    if (seatCount >= 8) {
+      vehicleType = "van";
+    } else if (seatCount >= 6) {
+      vehicleType = "suv";
+    } else if (seatCount === 4) {
+      vehicleType = "hatchback";
     }
-  };
 
+    // 🚨 [FIXED]: Handling overnight trips date calculation
+    const departureDateTime = new Date(`${values.date}T${values.time}`);
+    let arrivalDateTime = null;
+
+    if (values.arrivalTime) {
+      arrivalDateTime = new Date(`${values.date}T${values.arrivalTime}`);
+      // Agar arrival time departure se pehle ka dikh raha hai, toh ye next day ki trip hai
+      if (arrivalDateTime < departureDateTime) {
+        arrivalDateTime.setDate(arrivalDateTime.getDate() + 1);
+      }
+    }
+
+    await api.post("/api/rides", {
+      origin: values.origin,
+      destination: values.destination,
+      originCoords: originLoc?.lat ? { lat: originLoc.lat, lng: originLoc.lon } : null,
+      destinationCoords: destLoc?.lat ? { lat: destLoc.lat, lng: destLoc.lon } : null,
+      departureAt: departureDateTime.toISOString(),
+      arrivalAt: arrivalDateTime ? arrivalDateTime.toISOString() : null,
+      seatsTotal: seatCount,
+      pricePerSeat: Number(values.price),
+      description: values.description || null,
+      vehicleType,
+    });
+    
+    toast.success(t("publish.success"));
+    navigate({ to: "/dashboard" });
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : t("publish.error"));
+  }
+};
   if (loading) return null;
 
   if (!user) {

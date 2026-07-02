@@ -219,12 +219,14 @@ router.patch("/:id/cancel", protect, restrictTo("driver"), async (req, res) => {
     // Get confirmed bookings for this ride
     const confirmedBookings = await Booking.find({ rideId: ride._id, status: "confirmed" });
     
-    // Find driver's next available ride (after current ride's departure time)
-    const nextRide = await Ride.findOne({
-      driverId: req.user._id,
-      status: "active",
-      departureAt: { $gt: ride.departureAt }
-    }).sort({ departureAt: 1 });
+    // Find driver's next available ride (MUST BE SAME ROUTE & after current departure time)
+const nextRide = await Ride.findOne({
+  driverId: req.user._id,
+  status: "active",
+  origin: ride.origin,       // 🚨 [FIXED]: Route matching checked strictly
+  destination: ride.destination,
+  departureAt: { $gt: ride.departureAt }
+}).sort({ departureAt: 1 });
 
     if (nextRide && confirmedBookings.length > 0) {
       // Get driver details for notification
@@ -425,52 +427,53 @@ router.patch(
     const rideId = req.params.id;
     const userId = req.user._id;
 
-    try {
-      const ride = await Ride.findById(rideId);
-      if (!ride) return res.status(404).json({ message: "Ride not found." });
-      if (String(ride.driverId) !== String(userId)) {
-        return res.status(403).json({ message: "Only the driver can update location." });
+   try {
+  const ride = await Ride.findById(rideId);
+  if (!ride) return res.status(404).json({ message: "Ride not found." });
+  if (String(ride.driverId) !== String(userId)) {
+    return res.status(403).json({ message: "Only the driver can update location." });
+  }
+  if (!ride.isTrackingLocation) {
+    return res.status(400).json({ message: "Location tracking is not enabled for this ride." });
+  }
+
+  const timestamp = new Date();
+
+  // 🚨 [FIXED]: Atomic Database Update to avoid Document Version VersionError
+  const updatedRide = await Ride.findByIdAndUpdate(
+    rideId,
+    {
+      $set: {
+        currentLocation: { latitude, longitude, timestamp }
+      },
+      $push: {
+        locationHistory: {
+          $each: [{ latitude, longitude, timestamp }],
+          $slice: -100 // Automatically retains only last 100 tracking coordinates
+        }
       }
-      if (!ride.isTrackingLocation) {
-        return res.status(400).json({ message: "Location tracking is not enabled for this ride." });
-      }
+    },
+    { new: true }
+  );
 
-      const timestamp = new Date();
+  // Emit real-time location update to all passengers
+  global.io.emit("driver_location_updated", {
+    rideId: ride._id,
+    currentLocation: updatedRide.currentLocation,
+    driverId: userId,
+  });
 
-      // Update current location
-      ride.currentLocation = {
-        latitude,
-        longitude,
-        timestamp,
-      };
+  const bookings = await Booking.find({ rideId, status: "confirmed" });
+  bookings.forEach((booking) => {
+    global.io.to(`user_${booking.passengerId}`).emit("driver_location_updated", {
+      rideId: ride._id,
+      currentLocation: updatedRide.currentLocation,
+      driverId: userId,
+    });
+  });
 
-      // Add to location history (keep last 100 points)
-      ride.locationHistory.push({ latitude, longitude, timestamp });
-      if (ride.locationHistory.length > 100) {
-        ride.locationHistory.shift();
-      }
-
-      await ride.save();
-
-      // Emit real-time location update to all passengers
-      global.io.emit("driver_location_updated", {
-        rideId: ride._id,
-        currentLocation: ride.currentLocation,
-        driverId: userId,
-      });
-
-      // Also notify specific passengers on this ride
-      const bookings = await Booking.find({ rideId, status: "confirmed" });
-      bookings.forEach((booking) => {
-        global.io.to(`user_${booking.passengerId}`).emit("driver_location_updated", {
-          rideId: ride._id,
-          currentLocation: ride.currentLocation,
-          driverId: userId,
-        });
-      });
-
-      res.json({ success: true, currentLocation: ride.currentLocation });
-    } catch (err) {
+  res.json({ success: true, currentLocation: updatedRide.currentLocation });
+}catch (err) {
       console.error("Update location error:", err);
       res.status(500).json({ message: err.message });
     }
