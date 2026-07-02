@@ -46,8 +46,8 @@ const userSchema = new mongoose.Schema(
     },
     vehicleSeats: {
       type: Number,
-      min: 1,
-      max: 15,
+      min: 4,
+      max: 12,
       default: null,
     },
     vehicleNumber: {
