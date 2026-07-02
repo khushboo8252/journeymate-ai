@@ -35,6 +35,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { getSocket } from "@/lib/socket";
 
 export const Route = createFileRoute("/admin/dashboard")({
   head: () => ({
@@ -182,6 +183,28 @@ function AdminDashboard() {
       return;
     }
     fetchData();
+
+    // Listen for driver profile updates via WebSocket
+    const socket = getSocket();
+    const handleDriverProfileUpdated = (data: any) => {
+      console.log("Driver profile updated:", data);
+      toast.success("New driver profile submitted for approval");
+      fetchData(); // Refresh data to show the new profile
+    };
+
+    const handleUserProfileUpdated = (data: any) => {
+      console.log("User profile updated:", data);
+      toast.success("User profile updated");
+      fetchData(); // Refresh data to show the updated profile
+    };
+
+    socket.on("driver_profile_updated", handleDriverProfileUpdated);
+    socket.on("user_profile_updated", handleUserProfileUpdated);
+
+    return () => {
+      socket.off("driver_profile_updated", handleDriverProfileUpdated);
+      socket.off("user_profile_updated", handleUserProfileUpdated);
+    };
   }, [navigate]);
 
   const fetchData = async () => {

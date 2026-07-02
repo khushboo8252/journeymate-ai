@@ -82,6 +82,10 @@ function RideDetailPage() {
   const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
 
+  // Default location to show map immediately (will be updated when driver location arrives)
+  // Using a default location (New Delhi) to show map immediately
+  const mapLocation = driverLocation || { latitude: 28.6139, longitude: 77.2090 };
+
   useEffect(() => {
     fetchRide();
     fetchPassengerSeats();
@@ -650,8 +654,8 @@ function RideDetailPage() {
                 </div>
               </div>
 
-              {/* Live Location Map */}
-              {!isDriver && driverLocation && (
+              {/* ── Live Location Map (for passengers when tracking is active) ── */}
+              {!isDriver && mapLocation && (
                 <div className="glass rounded-2xl overflow-hidden">
                   <div className="p-4 border-b border-border/30">
                     <h3 className="font-semibold text-base flex items-center gap-2">
@@ -661,8 +665,8 @@ function RideDetailPage() {
                   </div>
                   <div className="p-4 space-y-3">
                     <DriverLocationMap
-                      latitude={driverLocation.latitude}
-                      longitude={driverLocation.longitude}
+                      latitude={mapLocation.latitude}
+                      longitude={mapLocation.longitude}
                       isTracking={isTrackingLocation}
                     />
                     <div className="flex items-center gap-4 text-sm">

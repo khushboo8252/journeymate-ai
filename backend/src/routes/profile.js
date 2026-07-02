@@ -40,6 +40,13 @@ router.put(
         },
         { new: true }
       );
+
+      // Emit real-time event to admin dashboard for profile updates
+      global.io.emit("user_profile_updated", {
+        userId: user._id,
+        user: user.toPublic()
+      });
+
       res.json({ status: "success", user: user.toPublic() });
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -60,8 +67,13 @@ router.put(
     body("avatarUrl").optional().trim(),
     body("avatarPublicId").optional().trim(),
     body("vehicleSeats")
+<<<<<<< HEAD
       .isInt({ min: 1, max: 12 })
       .withMessage("Vehicle seats must be between 1 and 12"),
+=======
+      .isInt({ min: 4, max: 15 })
+      .withMessage("Vehicle seats must be between 4 and 15"),
+>>>>>>> 05c61aae153ed0383d4829b7f277128040b5b2a0
     body("bankAccountNumber")
       .trim()
       .isLength({ min: 9, max: 18 })
@@ -121,6 +133,13 @@ router.put(
       } catch (emailError) {
         console.error("⚠️ Email Sending Failed:", emailError.message);
       }
+
+      // Emit real-time event to admin dashboard
+      global.io.emit("driver_profile_updated", {
+        userId: user._id,
+        user: user.toPublic(),
+        requiresApproval: true
+      });
 
       res.json({ status: "success", user: user.toPublic(), requiresApproval: true });
       

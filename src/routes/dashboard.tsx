@@ -77,7 +77,7 @@ type DriverBooking = ApiBooking & {
 
 function DashboardPage() {
   const { t } = useTranslation();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, setUser } = useAuth();
   const router = useRouter();
   const [myRides, setMyRides] = useState<ApiRide[]>([]);
   const [myBookings, setMyBookings] = useState<BookingWithRide[]>([]);
@@ -132,16 +132,31 @@ function DashboardPage() {
       checkApprovalStatus();
     }
 
-    socket.on("driver_approved", (driver) => {
+    // Listen for real-time events
+    socket.on("driver_approved", async (driver) => {
       if (driver._id === user._id) {
         setShowApprovalPopup(true);
         toast.success(t("dashboard.approval_popup"));
+        // Refresh user data to update approval status
+        try {
+          const userData = await api.get<{ user: ApiUser }>("/api/profile");
+          setUser(userData.user); // Update user state without reload
+        } catch (err) {
+          console.error("Failed to refresh user data:", err);
+        }
       }
     });
 
-    socket.on("driver_rejected", (driver) => {
-      if (driver._id === user._id) {
-        toast.error("Your driver profile has been rejected. Please update your documents.");
+    socket.on("driver_rejected", async (data) => {
+      if (data.driver._id === user._id) {
+        toast.error(`Your driver profile has been rejected. ${data.rejectionReason || "Please update your documents."}`);
+        // Refresh user data to update approval status
+        try {
+          const userData = await api.get<{ user: ApiUser }>("/api/profile");
+          setUser(userData.user); // Update user state without reload
+        } catch (err) {
+          console.error("Failed to refresh user data:", err);
+        }
       }
     });
 
@@ -223,6 +238,18 @@ function DashboardPage() {
       }
     });
 
+    // New ride created - refresh search results for passengers
+    socket.on("ride_created", (ride) => {
+      if (!isDriver) {
+        toast.success("New ride available matching your search!");
+        // Refresh search results if user has active search
+        if (searchFrom || searchTo || searchDate) {
+          handleSearch();
+        }
+      }
+    });
+
+
     return () => {
       socket.off("driver_approved");
       socket.off("driver_rejected");
@@ -237,6 +264,7 @@ function DashboardPage() {
       socket.off("passengers_transferred");
       socket.off("cancellation_count_updated");
       socket.off("driver_blocked");
+      socket.off("ride_created");
     };
   }, [user]);
 

@@ -160,8 +160,15 @@ router.post(
       });
 
       // Auto-generate seats for the ride based on user-selected total
-      const seatData = generateSeats(ride._id, vehicleType, finalSeatsTotal);
-      await Seat.insertMany(seatData);
+      try {
+        const seatData = generateSeats(ride._id, vehicleType, finalSeatsTotal);
+        await Seat.insertMany(seatData);
+      } catch (seatError) {
+        console.error("Seat generation error:", seatError);
+        // If seat generation fails, delete the ride to maintain consistency
+        await Ride.findByIdAndDelete(ride._id);
+        return res.status(500).json({ message: "Failed to generate seats. Please try again." });
+      }
 
       // Emit real-time event for new ride
       global.io.emit("ride_created", ride);
